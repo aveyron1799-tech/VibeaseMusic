@@ -1,0 +1,91 @@
+import AppKit
+import MediaPlayer
+
+/// System Now Playing integration: media keys, Control Center, lock-screen metadata.
+@MainActor
+final class NowPlayingManager {
+    static let shared = NowPlayingManager()
+
+    private weak var player: PlayerService?
+    private var artworkTask: Task<Void, Never>?
+    private var info: [String: Any] = [:]
+    private var lastElapsedPublish: TimeInterval?
+    private var lastPublishedRate: Double?
+
+
+    private init() {}
+
+    func attach(to player: PlayerService) {
+        self.player = player
+        let center = MPRemoteCommandCenter.shared()
+
+        center.playCommand.addTarget { [weak player] _ in
+            guard let player, player.hasCurrentTrack else { return .noActionableNowPlayingItem }
+            if !player.isPlaying { player.togglePlayPause() }
+            return .success
+        }
+        center.pauseCommand.addTarget { [weak player] _ in
+            guard let player, player.hasCurrentTrack else { return .noActionableNowPlayingItem }
+            if player.isPlaying { player.togglePlayPause() }
+            return .success
+        }
+        center.togglePlayPauseCommand.addTarget { [weak player] _ in
+            guard let player, player.hasCurrentTrack else { return .noActionableNowPlayingItem }
+            player.togglePlayPause()
+            return .success
+        }
+        center.nextTrackCommand.addTarget { [weak player] _ in
+            player?.next()
+            return .success
+        }
+        center.previousTrackCommand.addTarget { [weak player] _ in
+            player?.previous()
+            return .success
+        }
+        center.changePlaybackPositionCommand.addTarget { [weak player] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            player?.seek(to: event.positionTime)
+            return .success
+        }
+    }
+
+    func updateMetadata(for track: Track, duration: TimeInterval, isPlaying: Bool = true) {
+        lastElapsedPublish = nil
+        lastPublishedRate = nil
+        info = [
+            MPMediaItemPropertyTitle: track.name,
+            MPMediaItemPropertyArtist: track.artistNames,
+            MPMediaItemPropertyAlbumTitle: track.album.name,
+            MPMediaItemPropertyPlaybackDuration: duration,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: 0.0,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+        ]
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+
+        artworkTask?.cancel()
+        guard let url = track.album.picUrl?.resizedImageURL(512) else { return }
+        artworkTask = Task { [weak self] in
+            guard let image = await ImageCache.shared.image(for: url),
+                  let self, !Task.isCancelled else { return }
+            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            self.info[MPMediaItemPropertyArtwork] = artwork
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = self.info
+        }
+    }
+
+    func updateElapsed(_ elapsed: TimeInterval, rate: Double, force: Bool = true) {
+        // The system extrapolates progress from elapsed time and playback rate.
+        // Periodic callbacks need only a coarse sync; transport actions stay immediate.
+        if !force, lastPublishedRate == rate, let lastElapsedPublish,
+           elapsed >= lastElapsedPublish, elapsed - lastElapsedPublish < 1 {
+            return
+        }
+        lastElapsedPublish = elapsed
+        lastPublishedRate = rate
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
+        info[MPNowPlayingInfoPropertyPlaybackRate] = rate
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        MPNowPlayingInfoCenter.default().playbackState = rate > 0 ? .playing : .paused
+    }
+}
