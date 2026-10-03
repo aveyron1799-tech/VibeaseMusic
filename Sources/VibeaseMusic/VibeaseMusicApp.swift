@@ -11,12 +11,17 @@ struct VibeaseMusicApp: App {
 
     var body: some Scene {
         Window("VibeaseMusic", id: "main") {
-            MainWindow()
+            Group {
+                switch settings.uiTheme {
+                case .washi: MainWindow()
+                case .classic: ClassicMainWindow()
+                }
+            }
                 .environment(player)
                 .environment(account)
                 .environment(settings)
                 .environment(toasts)
-                .tint(Theme.accent)
+                .tint(themeAccent)
                 .preferredColorScheme(settings.appearance.colorScheme)
                 .frame(minWidth: Theme.Layout.minWindowWidth,
                        minHeight: Theme.Layout.minWindowHeight)
@@ -77,25 +82,44 @@ struct VibeaseMusicApp: App {
         }
 
         MenuBarExtra {
-            MenuBarPlayerView()
+            Group {
+                switch settings.uiTheme {
+                case .washi: MenuBarPlayerView()
+                case .classic: ClassicMenuBarPlayerView()
+                }
+            }
                 .environment(player)
                 .environment(account)
                 .environment(settings)
-                .tint(Theme.accent)
+                .tint(themeAccent)
                 .preferredColorScheme(settings.appearance.colorScheme)
         } label: {
-            MenuBarStatusLabel()
+            Group {
+                switch settings.uiTheme {
+                case .washi: MenuBarStatusLabel()
+                case .classic: ClassicMenuBarStatusLabel()
+                }
+            }
                 .environment(player)
         }
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView()
+            Group {
+                switch settings.uiTheme {
+                case .washi: SettingsView()
+                case .classic: ClassicSettingsView()
+                }
+            }
                 .environment(account)
                 .environment(settings)
-                .tint(Theme.accent)
+                .tint(themeAccent)
                 .preferredColorScheme(settings.appearance.colorScheme)
         }
+    }
+
+    private var themeAccent: Color {
+        settings.uiTheme == .washi ? Theme.accent : ClassicTheme.accent
     }
 }
 

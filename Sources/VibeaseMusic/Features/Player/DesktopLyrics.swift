@@ -136,45 +136,83 @@ private struct DesktopLyricsBox: View {
             if let line = currentLine, !line.text.isEmpty {
                 // The box itself stays put; only the text crossfades and the
                 // capsule width eases to the new line's size.
-                VStack(spacing: 5) {
-                    Text(line.text)
-                        .font(.serif(27, .bold))
-                        .tracking(1)
-                        .foregroundStyle(Self.paperWhite)
-                        .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
-                        .contentTransition(.opacity)
-                    if settings.showLyricsTranslation, let translation = line.translation {
-                        Text(translation)
-                            .font(.serif(16, .semibold))
-                            .foregroundStyle(Self.paperWhite.opacity(0.8))
-                            .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
-                            .contentTransition(.opacity)
-                    }
+                if settings.uiTheme == .washi {
+                    washiBox(line)
+                        .transition(.opacity)
+                } else {
+                    classicBox(line)
+                        .transition(.opacity)
                 }
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
-                        .fill(Self.sumi.opacity(0.5))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
-                                .strokeBorder(Self.paperWhite.opacity(0.12), lineWidth: 0.75)
-                        )
-                )
-                .overlay(alignment: .topLeading) {
-                    Circle()
-                        .fill(Theme.accent)
-                        .frame(width: 4, height: 4)
-                        .padding(9)
-                        .accessibilityHidden(true)
-                }
-                .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.3), value: currentLine?.id)
         .animation(.easeInOut(duration: 0.25), value: currentLine == nil)
         .fixedSize()
+    }
+
+    private func washiBox(_ line: LyricLine) -> some View {
+        VStack(spacing: 5) {
+            Text(line.text)
+                .font(.serif(27, .bold))
+                .tracking(1)
+                .foregroundStyle(Self.paperWhite)
+                .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
+                .contentTransition(.opacity)
+            if settings.showLyricsTranslation, let translation = line.translation {
+                Text(translation)
+                    .font(.serif(16, .semibold))
+                    .foregroundStyle(Self.paperWhite.opacity(0.8))
+                    .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
+                    .contentTransition(.opacity)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .lineLimit(2)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
+                .fill(Self.sumi.opacity(0.5))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
+                        .strokeBorder(Self.paperWhite.opacity(0.12), lineWidth: 0.75)
+                )
+        )
+        .overlay(alignment: .topLeading) {
+            Circle()
+                .fill(Theme.accent)
+                .frame(width: 4, height: 4)
+                .padding(9)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func classicBox(_ line: LyricLine) -> some View {
+        VStack(spacing: 5) {
+            Text(line.text)
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                .contentTransition(.opacity)
+            if settings.showLyricsTranslation, let translation = line.translation {
+                Text(translation)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                    .contentTransition(.opacity)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .lineLimit(2)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.black.opacity(0.42))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                )
+        )
     }
 }

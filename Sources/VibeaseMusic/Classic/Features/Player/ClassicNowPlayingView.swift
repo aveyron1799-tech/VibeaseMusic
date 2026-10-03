@@ -1,24 +1,20 @@
+// Classic theme: the original interface, kept intact alongside Washi.
 import SwiftUI
 
-/// Immersive now-playing page: the artwork sits like a moon inside an ensō
-/// that is brushed around it as the song plays; lyrics are set in Songti and
-/// fade like ink the further they are from the current line.
-struct NowPlayingView: View {
+/// Immersive full-window now-playing page: artwork-tinted gradient backdrop,
+/// large artwork on the left, big synced lyrics on the right.
+struct ClassicNowPlayingView: View {
     let onNavigate: (Destination) -> Void
 
     @Environment(PlayerService.self) private var player
     @Environment(AccountStore.self) private var account
     @Environment(SettingsManager.self) private var settings
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var artworkImage: NSImage?
     @State private var colors: ArtworkColors = .fallback
-    @State private var hasArtworkColors = false
     @State private var activeIndex: Int?
     @State private var isUserScrolling = false
     @State private var resumeTask: Task<Void, Never>?
-    @State private var playPresses = 0
-    @State private var appeared = false
 
     var body: some View {
         ZStack {
@@ -32,30 +28,27 @@ struct NowPlayingView: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.horizontal, 56)
-            .padding(.vertical, 44)
+            .padding(.horizontal, 48)
+            .padding(.vertical, 40)
         }
         .overlay(alignment: .topLeading) {
             Button {
                 close()
             } label: {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.ink.opacity(0.75))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
                     .frame(width: 32, height: 32)
-                    .compatGlass(interactive: true, in: Circle())
+                    .background(.white.opacity(0.12), in: Circle())
             }
-            .buttonStyle(.pressable)
-            .help("收起")
-            .padding(.top, 40)
-            .padding(.leading, 24)
+            .buttonStyle(.classicPressable)
+            .padding(.top, 16)
+            .padding(.leading, 20)
         }
         .ignoresSafeArea()
+        .preferredColorScheme(.dark)
         .task(id: player.currentTrack?.id) {
             await loadArtwork()
-        }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.8).delay(0.1)) { appeared = true }
         }
         .onExitCommand {
             close()
@@ -72,32 +65,23 @@ struct NowPlayingView: View {
 
     // MARK: - Backdrop
 
-    /// Plain paper with the artwork's colour bleeding in like watercolour,
-    /// and faint distant mountains along the bottom edge.
     private var backdrop: some View {
-        ZStack(alignment: .bottom) {
-            PaperBackground(wash: hasArtworkColors ? colors.primary : nil)
-            if let artworkImage {
-                Image(nsImage: artworkImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 900, height: 900)
-                    .blur(radius: 120)
-                    .opacity(0.14)
-                    .blendMode(.multiply)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .offset(x: -260, y: -260)
-                    .clipped()
-                    .allowsHitTesting(false)
-            }
-            InkMountains(seed: Double(player.currentTrack?.id ?? 7).truncatingRemainder(dividingBy: 9) + 0.5)
-                .frame(height: 170)
-                .opacity(0.8)
-                .offset(y: appeared ? 0 : 40)
-                .opacity(appeared ? 1 : 0)
+        ZStack {
+            LinearGradient(
+                colors: [colors.primary, colors.secondary],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+            RadialGradient(
+                colors: [.white.opacity(0.12), .clear],
+                center: .topLeading, startRadius: 0, endRadius: 700
+            )
+            LinearGradient(
+                colors: [.clear, .black.opacity(0.35)],
+                startPoint: .top, endPoint: .bottom
+            )
         }
         .ignoresSafeArea()
-        .animation(.easeInOut(duration: 1.2), value: colors)
+        .animation(.easeInOut(duration: 0.8), value: colors)
     }
 
     private func loadArtwork() async {
@@ -105,125 +89,92 @@ struct NowPlayingView: View {
               let url = urlString.resizedImageURL(768) else {
             artworkImage = nil
             colors = .fallback
-            hasArtworkColors = false
             return
         }
-        let image = await ImageCache.shared.image(for: url)
-        guard !Task.isCancelled else { return }
-        artworkImage = image
-        if let image {
+        if let image = await ImageCache.shared.image(for: url) {
+            artworkImage = image
             colors = ArtworkPalette.extract(from: image, cacheKey: urlString)
-            hasArtworkColors = true
-        } else {
-            colors = .fallback
-            hasArtworkColors = false
         }
     }
 
     // MARK: - Left column
 
-    private var playbackFraction: Double {
-        guard player.duration > 0 else { return 0 }
-        return min(max(player.progress / player.duration, 0), 1)
-    }
+    private var leftColumn: some View {
+        VStack(spacing: 26) {
+            Spacer()
 
-    private var artwork: some View {
-        let diameter: CGFloat = 292
-        return ZStack {
-            Circle()
-                .stroke(Theme.ink.opacity(0.1), lineWidth: 0.75)
-                .frame(width: diameter + 52, height: diameter + 52)
-            Enso(progress: max(playbackFraction, 0.004), lineWidth: 9, color: Theme.ink.opacity(0.82))
-                .frame(width: diameter + 70, height: diameter + 70)
-                .animation(.linear(duration: 0.5), value: playbackFraction)
             Group {
                 if let artworkImage {
                     Image(nsImage: artworkImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } else {
-                    Circle()
-                        .fill(Theme.wash)
+                    Rectangle()
+                        .fill(.white.opacity(0.06))
                         .overlay(
                             Image(systemName: "music.note")
-                                .font(.system(size: 44, weight: .ultraLight))
-                                .foregroundStyle(Theme.ink.opacity(0.3))
+                                .font(.system(size: 48, weight: .light))
+                                .foregroundStyle(.white.opacity(0.3))
                         )
                 }
             }
-            .frame(width: diameter, height: diameter)
-            .clipShape(Circle())
-            .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
-            .shadow(color: Theme.shadow.opacity(1.4), radius: 24, y: 14)
-            // Paused: colours drain a little and the moon settles.
-            .saturation(player.isPlaying ? 1 : 0.35)
-            .scaleEffect(player.isPlaying ? 1 : 0.96)
-            .animation(.easeInOut(duration: 0.9), value: player.isPlaying)
-        }
-        .scaleEffect(appeared || reduceMotion ? 1 : 0.92)
-        .opacity(appeared || reduceMotion ? 1 : 0)
-    }
-
-    private var leftColumn: some View {
-        VStack(spacing: 30) {
-            Spacer()
-
-            artwork
+            .frame(width: 340, height: 340)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: .black.opacity(0.45), radius: 36, y: 18)
+            .scaleEffect(player.isPlaying ? 1 : 0.95)
+            .animation(ClassicAnimation.bouncy, value: player.isPlaying)
 
             if let track = player.currentTrack {
-                VStack(spacing: 8) {
+                VStack(spacing: 5) {
                     HStack(spacing: 8) {
                         if track.album.id > 0 {
                             navigationButton(track.name, destination: .album(track.album.id),
-                                             font: .serif(25, .bold), color: Theme.ink)
+                                             font: .system(size: 21, weight: .bold), color: .white)
                                 .help("打开专辑：\(track.album.name)")
                         } else {
                             Text(track.name)
-                                .font(.serif(25, .bold))
-                                .foregroundStyle(Theme.ink)
+                                .font(.system(size: 21, weight: .bold))
+                                .foregroundStyle(.white)
                                 .lineLimit(1)
                         }
-                        if track.fee == 1 { VIPBadge() }
+                        if track.fee == 1 { ClassicVIPBadge() }
                     }
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         ForEach(Array(track.artists.enumerated()), id: \.offset) { index, artist in
                             if index > 0 {
-                                Text("/").foregroundStyle(Theme.ink.opacity(0.3))
+                                Text("/").foregroundStyle(.white.opacity(0.5))
                             }
                             if artist.id > 0 {
                                 navigationButton(artist.name, destination: .artist(artist.id),
-                                                 font: .system(size: 13), color: Theme.ink.opacity(0.62))
+                                                 font: .system(size: 13.5), color: .white.opacity(0.7))
                                     .help("打开歌手：\(artist.name)")
                             } else {
                                 Text(artist.name)
-                                    .foregroundStyle(Theme.ink.opacity(0.6))
+                                    .foregroundStyle(.white.opacity(0.65))
                             }
                         }
                         if track.album.id > 0 {
-                            Text("·").foregroundStyle(Theme.accent)
+                            Text("—").foregroundStyle(.white.opacity(0.5))
                             navigationButton(track.album.name, destination: .album(track.album.id),
-                                             font: .system(size: 13), color: Theme.ink.opacity(0.62))
+                                             font: .system(size: 13.5), color: .white.opacity(0.7))
                                 .help("打开专辑：\(track.album.name)")
                         }
                     }
-                    .font(.system(size: 13))
+                    .font(.system(size: 13.5))
                     .lineLimit(1)
                 }
-                .frame(maxWidth: 420)
-                .id(track.id)
-                .transition(.opacity.combined(with: .offset(y: 6)))
+                .frame(maxWidth: 400)
             }
 
-            VStack(spacing: 18) {
-                NowPlayingScrubber()
-                    .frame(maxWidth: 360)
+            VStack(spacing: 14) {
+                ClassicNowPlayingScrubber()
+                    .frame(maxWidth: 380)
                 controls
             }
 
             Spacer()
         }
         .padding(.trailing, hasLyricsColumn ? 30 : 0)
-        .animation(.easeOut(duration: 0.5), value: player.currentTrack?.id)
     }
 
     private func navigationButton(_ title: String, destination: Destination,
@@ -240,57 +191,57 @@ struct NowPlayingView: View {
     }
 
     private var controls: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 22) {
             if let track = player.currentTrack {
-                LikeButton(trackID: track.id, size: 15, diameter: 40)
+                let liked = account.isLiked(track.id)
+                circleButton(
+                    icon: liked ? "heart.fill" : "heart",
+                    size: 15, tint: liked ? ClassicTheme.accent : nil
+                ) {
+                    Task { await account.toggleLike(trackID: track.id) }
+                }
             }
 
             if player.isFMMode {
-                circleButton(icon: "trash", size: 14, help: "不喜欢，换一首") {
+                circleButton(icon: "trash", size: 14) {
                     player.fmTrash()
                 }
             } else {
-                circleButton(icon: "backward.fill", size: 15, help: "上一首") {
+                circleButton(icon: "backward.fill", size: 16) {
                     player.previous()
                 }
             }
 
             Button {
-                playPresses += 1
                 player.togglePlayPause()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Theme.ink)
-                        .frame(width: 60, height: 60)
-                        .shadow(color: Theme.shadow.opacity(1.3), radius: 12, y: 6)
+                        .fill(.white)
+                        .frame(width: 58, height: 58)
+                        .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Theme.onInk)
-                        .offset(x: player.isPlaying ? 0 : 2)
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundStyle(.black.opacity(0.85))
                         .contentTransition(.symbolEffect(.replace))
                 }
-                .inkBloom(trigger: playPresses, color: Theme.ink, scale: 2.4)
             }
-            .buttonStyle(.pressable)
-            .help(player.isPlaying ? "暂停" : "播放")
+            .buttonStyle(.classicPressable)
 
-            circleButton(icon: "forward.fill", size: 15, help: "下一首") {
+            circleButton(icon: "forward.fill", size: 16) {
                 player.next()
             }
 
             if player.isFMMode {
-                Image(systemName: "wind")
+                Image(systemName: "wave.3.right.circle.fill")
                     .font(.system(size: 15))
-                    .foregroundStyle(Theme.accent.opacity(0.8))
+                    .foregroundStyle(.white.opacity(0.5))
                     .frame(width: 40, height: 40)
-                    .help("私人漫游中")
             } else {
                 circleButton(
                     icon: player.shuffleEnabled ? "shuffle" : (player.repeatMode == .one ? "repeat.1" : "repeat"),
                     size: 14,
-                    tint: player.shuffleEnabled || player.repeatMode != .off ? Theme.accent : nil,
-                    help: "播放模式"
+                    tint: player.shuffleEnabled || player.repeatMode != .off ? ClassicTheme.accent : nil
                 ) {
                     if player.shuffleEnabled {
                         player.toggleShuffle()
@@ -302,18 +253,16 @@ struct NowPlayingView: View {
         }
     }
 
-    private func circleButton(icon: String, size: CGFloat, tint: Color? = nil,
-                              help: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+    private func circleButton(icon: String, size: CGFloat,
+                              tint: Color? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: size, weight: .medium))
-                .foregroundStyle(tint ?? Theme.ink.opacity(0.75))
+                .foregroundStyle(tint ?? .white.opacity(0.8))
                 .frame(width: 40, height: 40)
-                .overlay(Circle().strokeBorder(Theme.ink.opacity(0.14), lineWidth: 0.75))
-                .contentShape(Circle())
+                .background(.white.opacity(0.1), in: Circle())
         }
-        .buttonStyle(.pressable)
-        .help(help)
+        .buttonStyle(.classicPressable)
     }
 
     // MARK: - Lyrics column
@@ -323,7 +272,7 @@ struct NowPlayingView: View {
         if let lyrics = player.lyrics, !lyrics.isEmpty {
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
-                    LazyVStack(alignment: .leading, spacing: 28) {
+                    LazyVStack(alignment: .leading, spacing: 26) {
                         Color.clear.frame(height: 200)
                         ForEach(lyrics.lines) { line in
                             bigLyricLine(line, isActive: line.id == activeIndex)
@@ -337,23 +286,19 @@ struct NowPlayingView: View {
                     LinearGradient(
                         stops: [
                             .init(color: .clear, location: 0),
-                            .init(color: .black, location: 0.16),
-                            .init(color: .black, location: 0.82),
+                            .init(color: .black, location: 0.12),
+                            .init(color: .black, location: 0.85),
                             .init(color: .clear, location: 1),
                         ],
                         startPoint: .top, endPoint: .bottom
                     )
                 )
-                .onAppear {
-                    activeIndex = lyrics.activeIndex(at: player.progress + 0.2)
-                    if let activeIndex { proxy.scrollTo(activeIndex, anchor: .center) }
-                }
                 .onChange(of: player.progress) {
                     let index = lyrics.activeIndex(at: player.progress + 0.2)
                     guard index != activeIndex else { return }
                     activeIndex = index
                     guard !isUserScrolling, let index else { return }
-                    withAnimation(.spring(response: 0.9, dampingFraction: 0.88)) {
+                    withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) {
                         proxy.scrollTo(index, anchor: .center)
                     }
                 }
@@ -376,69 +321,60 @@ struct NowPlayingView: View {
                 }
             }
         } else if player.lyrics?.isInstrumental == true {
-            quietState(text: "纯音乐，请静心聆听")
+            VStack(spacing: 10) {
+                Image(systemName: "music.quarternote.3")
+                    .font(.system(size: 36, weight: .light))
+                    .foregroundStyle(.white.opacity(0.4))
+                Text("纯音乐，请欣赏")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if player.lyrics == nil {
-            InkLoader(size: 40, color: Theme.ink.opacity(0.6))
+            ProgressView()
+                .controlSize(.small)
+                .tint(.white)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            quietState(text: "此曲无词，留白亦是诗")
+            VStack(spacing: 10) {
+                Image(systemName: "quote.bubble")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundStyle(.white.opacity(0.45))
+                Text("暂无歌词")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-    }
-
-    private func quietState(text: String) -> some View {
-        VStack(spacing: 16) {
-            Enso(lineWidth: 4, color: Theme.ink.opacity(0.35))
-                .frame(width: 70, height: 70)
-            Text(text)
-                .font(.serif(16))
-                .tracking(3)
-                .foregroundStyle(Theme.ink.opacity(0.55))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func bigLyricLine(_ line: LyricLine, isActive: Bool) -> some View {
-        // Before the first line is reached everything stays legible.
-        let distance = activeIndex.map { abs(line.id - $0) } ?? 0
-        let resting = activeIndex == nil ? 0.55 : max(0.14, 0.42 - Double(distance) * 0.06)
-        let blur = isActive || isUserScrolling || activeIndex == nil ? 0 : min(Double(distance) * 0.4, 2)
-        return Button {
+        Button {
             player.seek(to: line.time)
         } label: {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(line.text.isEmpty ? "……" : line.text)
-                        .font(.serif(isActive ? 27 : 21, isActive ? .bold : .medium))
-                        .foregroundStyle(Theme.ink.opacity(isActive ? 1 : resting))
-                }
+            VStack(alignment: .leading, spacing: 5) {
+                Text(line.text.isEmpty ? "♪" : line.text)
+                    .font(.system(size: isActive ? 26 : 20, weight: isActive ? .bold : .semibold))
+                    .foregroundStyle(.white.opacity(isActive ? 1 : 0.45))
                 if settings.showLyricsTranslation, let translation = line.translation {
                     Text(translation)
-                        .font(.system(size: isActive ? 15 : 13.5))
-                        .foregroundStyle(Theme.ink.opacity(isActive ? 0.62 : resting * 0.8))
+                        .font(.system(size: isActive ? 16 : 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(isActive ? 0.7 : 0.35))
                 }
             }
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .leading) {
-                // A vermilion tick marks the line being sung.
-                Capsule()
-                    .fill(Theme.accent)
-                    .frame(width: 3, height: isActive ? 20 : 0)
-                    .offset(x: -16)
-                    .opacity(isActive ? 1 : 0)
-            }
             .contentShape(Rectangle())
-            .blur(radius: blur)
+            .blur(radius: isActive ? 0 : 0.6)
         }
         .buttonStyle(.plain)
-        .animation(.spring(response: 0.55, dampingFraction: 0.85), value: isActive)
-        .animation(.easeOut(duration: 0.5), value: distance)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isActive)
     }
 }
 
-// MARK: - Scrubber
+// MARK: - Scrubber (white-on-dark variant)
 
-struct NowPlayingScrubber: View {
+struct ClassicNowPlayingScrubber: View {
     @Environment(PlayerService.self) private var player
 
     @State private var isHovering = false
@@ -452,21 +388,22 @@ struct NowPlayingScrubber: View {
     }
 
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: 5) {
             GeometryReader { geo in
                 let width = geo.size.width
-                let lineHeight: CGFloat = isHovering || isDragging ? 3 : 1.5
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Theme.ink.opacity(0.12))
-                        .frame(height: lineHeight)
+                        .fill(.white.opacity(0.25))
+                        .frame(height: 4)
                     Capsule()
-                        .fill(Theme.ink.opacity(0.8))
-                        .frame(width: max(lineHeight, width * fraction), height: lineHeight)
+                        .fill(.white)
+                        .frame(width: max(4, width * fraction), height: 4)
                     Circle()
-                        .fill(Theme.accent)
+                        .fill(.white)
                         .frame(width: thumbDiameter, height: thumbDiameter)
+                        .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                         .offset(x: width * fraction - thumbDiameter / 2)
+                        .opacity(isHovering || isDragging ? 1 : 0)
                 }
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
@@ -490,7 +427,7 @@ struct NowPlayingScrubber: View {
             }
             .frame(height: 14)
             .onHover { hovering in
-                withAnimation(AppAnimation.quick) { isHovering = hovering }
+                withAnimation(ClassicAnimation.quick) { isHovering = hovering }
             }
 
             HStack {
@@ -498,19 +435,12 @@ struct NowPlayingScrubber: View {
                 Spacer()
                 Text(Formatters.duration(player.duration))
             }
-            .font(.system(size: 10).monospacedDigit())
-            .foregroundStyle(Theme.ink.opacity(0.45))
+            .font(.system(size: 10.5).monospacedDigit())
+            .foregroundStyle(.white.opacity(0.55))
         }
-        .onDisappear {
-            if isDragging {
-                isDragging = false
-                player.isScrubbing = false
-            }
-        }
-        .animation(AppAnimation.quick, value: isHovering)
     }
 
     private var thumbDiameter: CGFloat {
-        isDragging ? 12 : (isHovering ? 10 : 6)
+        isDragging ? 13 : (isHovering ? 11 : 9)
     }
 }

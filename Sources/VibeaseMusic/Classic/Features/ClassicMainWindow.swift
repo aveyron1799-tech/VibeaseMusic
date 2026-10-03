@@ -1,6 +1,7 @@
+// Classic theme: the original interface, kept intact alongside Washi.
 import SwiftUI
 
-struct MainWindow: View {
+struct ClassicMainWindow: View {
     @Environment(PlayerService.self) private var player
     @Environment(AccountStore.self) private var account
     @Environment(SettingsManager.self) private var settings
@@ -11,43 +12,29 @@ struct MainWindow: View {
     @State private var path = NavigationPath()
     @State private var showLogin = false
     @State private var searchText = ""
-    @State private var searchSuggestions: [SearchSuggestion] = []
+    @State private var searchSuggestions: [ClassicSearchSuggestion] = []
     @State private var searchFocused = false
     @State private var selectedSuggestion = -1
     @State private var homeScrollRequest = 0
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(selection: $selection, showLogin: $showLogin) {
+            ClassicSidebarView(selection: $selection, showLogin: $showLogin) {
                 selection = .home
                 path = NavigationPath()
                 homeScrollRequest += 1
             }
                 .equatable()
-                .navigationSplitViewColumnWidth(min: 200, ideal: Theme.Layout.sidebarWidth, max: 280)
-                // Replaced by a paper toggle: the system one's Liquid Glass
-                // bezel would be the only piece of glass on the paper.
-                .toolbar(removing: .sidebarToggle)
+                .navigationSplitViewColumnWidth(min: 200, ideal: ClassicTheme.Layout.sidebarWidth, max: 280)
         } detail: {
             detailStack
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background { PaperBackground().ignoresSafeArea() }
-                .playerChrome()
+                .classicPlayerChrome()
         }
         .toolbar {
             if #available(macOS 26.0, *) {
-                ToolbarItem(placement: .navigation) {
-                    SidebarToggleButton(columnVisibility: $columnVisibility)
-                }
-                .sharedBackgroundVisibility(.hidden)
-            } else {
-                ToolbarItem(placement: .navigation) {
-                    SidebarToggleButton(columnVisibility: $columnVisibility)
-                }
-            }
-            if #available(macOS 26.0, *) {
                 ToolbarItem(placement: .primaryAction) {
-                    SearchFieldView(text: $searchText, isFocused: $searchFocused,
+                    ClassicSearchFieldView(text: $searchText, isFocused: $searchFocused,
                                     selectedSuggestion: $selectedSuggestion,
                                     suggestions: searchSuggestions,
                                     onSubmit: {
@@ -60,7 +47,7 @@ struct MainWindow: View {
                 .sharedBackgroundVisibility(.hidden)
             } else {
                 ToolbarItem(placement: .primaryAction) {
-                    SearchFieldView(text: $searchText, isFocused: $searchFocused,
+                    ClassicSearchFieldView(text: $searchText, isFocused: $searchFocused,
                                     selectedSuggestion: $selectedSuggestion,
                                     suggestions: searchSuggestions,
                                     onSubmit: {
@@ -77,10 +64,8 @@ struct MainWindow: View {
         .toolbar(player.showNowPlaying ? .hidden : .automatic, for: .windowToolbar)
         .toolbarBackground(player.showNowPlaying ? .hidden : .automatic, for: .windowToolbar)
         .background(WindowAccessor { window in
-            // Let the paper run up under the title bar instead of a grey strip.
-            let background = Theme.windowBackground
-            if window.backgroundColor !== background {
-                window.backgroundColor = background
+            if window.backgroundColor != .windowBackgroundColor {
+                window.backgroundColor = .windowBackgroundColor
             }
         })
         .overlay(alignment: .topTrailing) {
@@ -102,16 +87,16 @@ struct MainWindow: View {
             guard !Task.isCancelled, searchFocused else { return }
             let result = try? await NeteaseAPI.searchSuggest(query)
             guard !Task.isCancelled, searchFocused else { return }
-            var loaded = (result?.songs ?? []).prefix(3).map(SearchSuggestion.song)
-                + (result?.artists ?? []).prefix(3).map(SearchSuggestion.artist)
-                + (result?.albums ?? []).prefix(2).map(SearchSuggestion.album)
+            var loaded = (result?.songs ?? []).prefix(3).map(ClassicSearchSuggestion.song)
+                + (result?.artists ?? []).prefix(3).map(ClassicSearchSuggestion.artist)
+                + (result?.albums ?? []).prefix(2).map(ClassicSearchSuggestion.album)
             if loaded.isEmpty {
                 async let songs = try? NeteaseAPI.search(query, type: .songs, limit: 3)
                 async let artists = try? NeteaseAPI.search(query, type: .artists, limit: 3)
                 async let albums = try? NeteaseAPI.search(query, type: .albums, limit: 2)
-                loaded = (await songs?.songs ?? []).map(SearchSuggestion.song)
-                    + (await artists?.artists ?? []).map(SearchSuggestion.artist)
-                    + (await albums?.albums ?? []).map(SearchSuggestion.album)
+                loaded = (await songs?.songs ?? []).map(ClassicSearchSuggestion.song)
+                    + (await artists?.artists ?? []).map(ClassicSearchSuggestion.artist)
+                    + (await albums?.albums ?? []).map(ClassicSearchSuggestion.album)
             }
             guard !Task.isCancelled, searchFocused else { return }
             searchSuggestions = [.query(query)] + loaded
@@ -132,11 +117,11 @@ struct MainWindow: View {
             DesktopLyricsController.shared.sync(with: settings.showDesktopLyrics)
         }
         .sheet(isPresented: $showLogin) {
-            LoginSheet()
+            ClassicLoginSheet()
         }
         .overlay {
             if player.showNowPlaying {
-                NowPlayingView { destination in
+                ClassicNowPlayingView { destination in
                     var transaction = Transaction(animation: nil)
                     transaction.disablesAnimations = true
                     withTransaction(transaction) {
@@ -145,23 +130,17 @@ struct MainWindow: View {
                     }
                 }
                 .ignoresSafeArea()
-                .transition(.asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .opacity.combined(with: .scale(scale: 0.98))
-                ))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .overlay(alignment: .top) {
             if let toast = toasts.current {
-                ToastView(toast: toast)
-                    .transition(.asymmetric(
-                        insertion: .offset(y: -14).combined(with: .opacity),
-                        removal: .opacity.combined(with: .scale(scale: 0.96))
-                    ))
+                ClassicToastView(toast: toast)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                     .padding(.top, 12)
             }
         }
-        .animation(AppAnimation.smooth, value: player.showNowPlaying)
+        .animation(ClassicAnimation.smooth, value: player.showNowPlaying)
         .animation(.spring(duration: 0.3), value: toasts.current)
     }
 
@@ -169,8 +148,8 @@ struct MainWindow: View {
         NavigationStack(path: $path) {
             rootView
                 .id(account.sessionVersion)
-                .playerContentInset()
-                .appDestinations()
+                .classicPlayerContentInset()
+                .classicAppDestinations()
         }
         .onChange(of: selection) {
             path = NavigationPath()
@@ -190,45 +169,42 @@ struct MainWindow: View {
     private var rootView: some View {
         switch selection {
         case .home:
-            HomeView(scrollToTopRequest: homeScrollRequest)
+            ClassicHomeView(scrollToTopRequest: homeScrollRequest)
         case .explore:
-            ExploreView()
+            ClassicExploreView()
         case .fm:
-            FMView()
+            ClassicFMView()
         case .likedSongs:
             if let playlist = account.likedSongsPlaylist {
-                PlaylistDetailView(playlistID: playlist.id, isLikedList: true)
+                ClassicPlaylistDetailView(playlistID: playlist.id, isLikedList: true)
                     .id(playlist.id)
             } else {
                 loginPrompt
             }
         case .daily:
-            DailySongsView()
+            ClassicDailySongsView()
         case .recents:
-            RecentsView()
+            ClassicRecentsView()
         case .collections:
-            CollectionsView()
+            ClassicCollectionsView()
         case .cloud:
-            CloudView()
+            ClassicCloudView()
         case .playlist(let id):
-            PlaylistDetailView(playlistID: id)
+            ClassicPlaylistDetailView(playlistID: id)
                 .id(id)
         }
     }
 
     private var loginPrompt: some View {
-        VStack(spacing: 18) {
-            ZStack {
-                Enso(lineWidth: 5, color: Theme.ink.opacity(0.6))
-                    .frame(width: 92, height: 92)
-                SealStamp(text: "心", size: 30)
-                    .rotationEffect(.degrees(-5))
-            }
+        VStack(spacing: 16) {
+            Image(systemName: "heart.circle")
+                .font(.system(size: 48))
+                .foregroundStyle(.tertiary)
             Text("登录后查看你喜欢的音乐")
-                .font(.serif(17, .bold))
-                .foregroundStyle(Theme.ink)
+                .font(.headline)
             Button("登录") { showLogin = true }
-                .buttonStyle(.ink)
+                .buttonStyle(.borderedProminent)
+                .tint(ClassicTheme.accent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -241,9 +217,8 @@ struct MainWindow: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: suggestion.icon)
-                            .font(.system(size: 11))
                             .frame(width: 18)
-                            .foregroundStyle(index == selectedSuggestion ? Theme.accent : Theme.ink.opacity(0.45))
+                            .foregroundStyle(.secondary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(suggestion.title).lineLimit(1)
                             Text(suggestion.subtitle)
@@ -255,19 +230,20 @@ struct MainWindow: View {
                     }
                     .padding(.horizontal, 9)
                     .padding(.vertical, 6)
-                    .background(index == selectedSuggestion ? Theme.wash : .clear,
-                                in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .background(index == selectedSuggestion ? ClassicTheme.accent.opacity(0.12) : .clear,
+                                in: RoundedRectangle(cornerRadius: 7))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(8)
-        .frame(width: 240)
-        .compatGlass(in: RoundedRectangle(cornerRadius: Theme.Radius.large, style: .continuous))
+        .frame(width: 230)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 5)
     }
 
-    private func selectSearchSuggestion(_ suggestion: SearchSuggestion) {
+    private func selectSearchSuggestion(_ suggestion: ClassicSearchSuggestion) {
         searchFocused = false
         searchSuggestions = []
         switch suggestion {
@@ -282,7 +258,7 @@ struct MainWindow: View {
 
 // MARK: - Search field
 
-enum SearchSuggestion: Identifiable {
+enum ClassicSearchSuggestion: Identifiable {
     case query(String), song(Track), artist(ArtistSummary), album(AlbumSummary)
 
     var id: String {
@@ -319,13 +295,13 @@ enum SearchSuggestion: Identifiable {
     }
 }
 
-struct SearchFieldView: View {
+struct ClassicSearchFieldView: View {
     @Binding var text: String
     @Binding var isFocused: Bool
     @Binding var selectedSuggestion: Int
-    let suggestions: [SearchSuggestion]
+    let suggestions: [ClassicSearchSuggestion]
     let onSubmit: (String) -> Void
-    let onSelect: (SearchSuggestion) -> Void
+    let onSelect: (ClassicSearchSuggestion) -> Void
 
     @State private var placeholder = "搜索音乐、歌手、专辑"
     @FocusState private var focused: Bool
@@ -370,18 +346,11 @@ struct SearchFieldView: View {
                 .onChange(of: text) { isFocused = true }
                 .onChange(of: isFocused) { if !isFocused { focused = false } }
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Theme.sheet.opacity(focused ? 1 : 0.6), in: Capsule())
-        .overlay(Capsule().strokeBorder(focused ? Theme.ink.opacity(0.35) : Theme.hairline, lineWidth: 0.75))
-        .overlay(alignment: .bottom) {
-            // A thin vermilion brush line paints under the field while typing.
-            PaintedBrush(painted: focused, color: Theme.accent.opacity(0.7))
-                .frame(height: 2.5)
-                .padding(.horizontal, 16)
-                .offset(y: 1)
-        }
-        .animation(AppAnimation.quick, value: focused)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.primary.opacity(focused ? 0.18 : 0.08), lineWidth: 1))
+        .animation(ClassicAnimation.quick, value: focused)
         .padding(.trailing, 16)
         .task {
             if let keyword = try? await NeteaseAPI.searchDefaultKeyword(), !keyword.isEmpty {
@@ -395,57 +364,17 @@ struct SearchFieldView: View {
 
 }
 
-// MARK: - Sidebar toggle
-
-/// A bare ink glyph on the paper, with a faint wash on hover.
-private struct SidebarToggleButton: View {
-    @Binding var columnVisibility: NavigationSplitViewVisibility
-    @State private var isHovering = false
-
-    private var isCollapsed: Bool { columnVisibility == .detailOnly }
-
-    var body: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.28)) {
-                columnVisibility = isCollapsed ? .all : .detailOnly
-            }
-        } label: {
-            Image(systemName: "sidebar.leading")
-                .font(.system(size: 14, weight: .light))
-                .foregroundStyle(Theme.ink.opacity(isHovering ? 0.9 : 0.6))
-                .frame(width: 30, height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
-                        .fill(isHovering ? Theme.wash : .clear)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.pressable)
-        .focusEffectDisabled()
-        .onHover { isHovering = $0 }
-        .animation(AppAnimation.quick, value: isHovering)
-        .help(isCollapsed ? "显示边栏" : "隐藏边栏")
-        .accessibilityLabel(isCollapsed ? "显示边栏" : "隐藏边栏")
-    }
-}
-
 // MARK: - Toast
 
-struct ToastView: View {
+struct ClassicToastView: View {
     let toast: Toast
 
     var body: some View {
-        HStack(spacing: 9) {
-            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                .fill(Theme.accent)
-                .frame(width: 7, height: 7)
-                .rotationEffect(.degrees(45))
-            Text(toast.message)
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(Theme.ink)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 9)
-        .compatGlass(in: RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous))
+        Text(toast.message)
+            .font(.system(size: 12.5, weight: .medium))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 9)
+            .classicCompatGlass(in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
     }
 }

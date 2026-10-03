@@ -86,13 +86,11 @@ struct PaperGrain: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        if Theme.isWashi {
-            Image(nsImage: PaperTexture.image(dark: colorScheme == .dark))
-                .resizable(resizingMode: .tile)
-                .opacity(opacity)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
+        Image(nsImage: PaperTexture.image(dark: colorScheme == .dark))
+            .resizable(resizingMode: .tile)
+            .opacity(opacity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -113,14 +111,12 @@ struct PaperBackground: View {
                 RadialGradient(colors: [wash.opacity(0.08), .clear],
                                center: .bottomLeading, startRadius: 0, endRadius: 520)
             }
-            if Theme.isWashi {
-                PaperGrain()
-                // The sheet darkens faintly towards its edges. A plain gradient
-                // rather than a blend mode: blending forces an offscreen pass of
-                // the whole page on every frame of a resize.
-                RadialGradient(colors: [.clear, Theme.shadow.opacity(0.07)],
-                               center: .center, startRadius: 360, endRadius: 1100)
-            }
+            PaperGrain()
+            // The sheet darkens faintly towards its edges. A plain gradient
+            // rather than a blend mode: blending forces an offscreen pass of
+            // the whole page on every frame of a resize.
+            RadialGradient(colors: [.clear, Theme.shadow.opacity(0.07)],
+                           center: .center, startRadius: 360, endRadius: 1100)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -152,20 +148,12 @@ struct PaintedBrush: View {
     var color: Color = Theme.ink
 
     var body: some View {
-        if Theme.isWashi {
-            BrushStroke()
-                .fill(color)
-                .scaleEffect(x: painted ? 1 : 0.001, anchor: .leading)
-                .opacity(painted ? 1 : 0)
-                .animation(painted ? .easeOut(duration: 0.5) : .easeIn(duration: 0.2), value: painted)
-                .allowsHitTesting(false)
-        } else {
-            RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
-                .fill(color)
-                .opacity(painted ? 1 : 0)
-                .animation(AppAnimation.quick, value: painted)
-                .allowsHitTesting(false)
-        }
+        BrushStroke()
+            .fill(color)
+            .scaleEffect(x: painted ? 1 : 0.001, anchor: .leading)
+            .opacity(painted ? 1 : 0)
+            .animation(painted ? .easeOut(duration: 0.5) : .easeIn(duration: 0.2), value: painted)
+            .allowsHitTesting(false)
     }
 }
 
@@ -182,21 +170,6 @@ struct Enso: View {
     var sweep: Double = 338
 
     var body: some View {
-        if Theme.isWashi {
-            brush
-        } else {
-            // Classic: a clean, even ring.
-            Circle()
-                .inset(by: lineWidth / 2)
-                .trim(from: 0, to: min(max(progress, 0), 1) * sweep / 360)
-                .stroke(color.opacity(0.92), style: StrokeStyle(lineWidth: lineWidth * 0.7, lineCap: .round))
-                .rotationEffect(.degrees(startAngle))
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-    }
-
-    private var brush: some View {
         Canvas { context, size in
             let travelled = min(max(progress, 0), 1)
             guard travelled > 0.001 else { return }
@@ -290,14 +263,12 @@ struct SealStamp: View {
         .font(.serif(vertical ? size * 0.42 : size * 0.52, .bold))
         .foregroundStyle(Color(red: 0.99, green: 0.96, blue: 0.92))
         .frame(width: size, height: vertical ? size * 0.5 * CGFloat(max(characters.count, 1)) + size * 0.24 : size)
-        .background(color, in: RoundedRectangle(cornerRadius: size * (Theme.isWashi ? 0.12 : 0.22), style: .continuous))
-        .overlay {
-            if Theme.isWashi {
-                RoundedRectangle(cornerRadius: size * 0.08, style: .continuous)
-                    .strokeBorder(Color(red: 0.99, green: 0.96, blue: 0.92).opacity(0.55), lineWidth: max(size * 0.035, 0.6))
-                    .padding(size * 0.08)
-            }
-        }
+        .background(color, in: RoundedRectangle(cornerRadius: size * 0.12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: size * 0.08, style: .continuous)
+                .strokeBorder(Color(red: 0.99, green: 0.96, blue: 0.92).opacity(0.55), lineWidth: max(size * 0.035, 0.6))
+                .padding(size * 0.08)
+        )
         .overlay(PaperGrain(opacity: 1).blendMode(.destinationOut))
         .compositingGroup()
         .accessibilityLabel(text)
@@ -356,30 +327,22 @@ private struct InkBloomDrop: View {
     }
 }
 
-@MainActor
 extension View {
-    func inkBloom(trigger: Int, color: Color? = nil, scale: CGFloat = 2.3) -> some View {
-        modifier(InkBloomModifier(trigger: trigger, color: color ?? Theme.ink, scale: scale))
+    func inkBloom(trigger: Int, color: Color = Theme.ink, scale: CGFloat = 2.3) -> some View {
+        modifier(InkBloomModifier(trigger: trigger, color: color, scale: scale))
     }
 
     /// A sheet of paper lying on the page: no shadow until lifted.
-    func paperSheet(cornerRadius: CGFloat? = nil, lifted: Bool = false) -> some View {
-        let cornerRadius = cornerRadius ?? Theme.Radius.large
-        return background {
-            if Theme.isWashi {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Theme.sheet)
-                    .overlay(PaperGrain(opacity: 0.6)
-                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)))
-                    .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(Theme.hairline, lineWidth: 0.75))
-                    .shadow(color: Theme.shadow.opacity(lifted ? 1 : 0.35),
-                            radius: lifted ? 16 : 3, y: lifted ? 8 : 1)
-            } else {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(.primary.opacity(lifted ? 0.07 : 0.045))
-                    .shadow(color: lifted ? Theme.shadow : .clear, radius: 12, y: 4)
-            }
+    func paperSheet(cornerRadius: CGFloat = Theme.Radius.large, lifted: Bool = false) -> some View {
+        background {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Theme.sheet)
+                .overlay(PaperGrain(opacity: 0.6)
+                    .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)))
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Theme.hairline, lineWidth: 0.75))
+                .shadow(color: Theme.shadow.opacity(lifted ? 1 : 0.35),
+                        radius: lifted ? 16 : 3, y: lifted ? 8 : 1)
         }
     }
 }
@@ -392,10 +355,6 @@ struct InkMountains: View {
     var seed: Double = 1.7
 
     var body: some View {
-        if Theme.isWashi { mountains }
-    }
-
-    private var mountains: some View {
         Canvas { context, size in
             let layers: [(height: Double, opacity: Double, frequency: Double)] = [
                 (0.92, 0.05, 1.3), (0.70, 0.075, 2.1), (0.48, 0.11, 3.2),

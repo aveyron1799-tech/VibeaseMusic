@@ -1,0 +1,313 @@
+// Classic theme: the original interface, kept intact alongside Washi.
+import SwiftUI
+
+// MARK: - Skeletons
+
+struct ClassicSkeletonView: View {
+    var cornerRadius: CGFloat = ClassicTheme.Radius.standard
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+            let phase = context.date.timeIntervalSinceReferenceDate
+                .truncatingRemainder(dividingBy: 1.5) / 1.5
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(.quaternary.opacity(0.5))
+                .overlay(
+                    GeometryReader { geo in
+                        LinearGradient(
+                            colors: [.clear, .primary.opacity(0.08), .clear],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        .frame(width: geo.size.width * 0.6)
+                        .offset(x: (geo.size.width * 1.6) * phase - geo.size.width * 0.6)
+                    }
+                )
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        }
+    }
+}
+
+struct ClassicSkeletonCardView: View {
+    var size: CGFloat = ClassicTheme.Layout.cardSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ClassicSkeletonView().frame(width: size, height: size)
+            ClassicSkeletonView(cornerRadius: 4).frame(width: size * 0.8, height: 12)
+            ClassicSkeletonView(cornerRadius: 4).frame(width: size * 0.5, height: 10)
+        }
+    }
+}
+
+struct ClassicSkeletonShelf: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ClassicSkeletonView(cornerRadius: 4).frame(width: 120, height: 20)
+            HStack(spacing: 16) {
+                ForEach(0..<6, id: \.self) { _ in
+                    ClassicSkeletonCardView()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Staggered entrance
+
+private enum ClassicAnimationCache {
+    nonisolated(unsafe) static var animated = Set<String>()
+
+    static func hasAnimated(_ key: String) -> Bool { animated.contains(key) }
+
+    static func markAnimated(_ key: String) {
+        if animated.count > 600 { animated.removeAll() }
+        animated.insert(key)
+    }
+}
+
+struct ClassicStaggeredAppearanceModifier: ViewModifier {
+    let index: Int
+    var itemID: String
+
+    @State private var isVisible = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible ? 0 : 16)
+            .onAppear {
+                if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                    || ClassicAnimationCache.hasAnimated(itemID) {
+                    isVisible = true
+                    return
+                }
+                withAnimation(ClassicAnimation.snappy.delay(ClassicAnimation.stagger(for: index))) {
+                    isVisible = true
+                }
+                ClassicAnimationCache.markAnimated(itemID)
+            }
+    }
+}
+
+extension View {
+    func classicStaggeredAppearance(index: Int, id: String) -> some View {
+        modifier(ClassicStaggeredAppearanceModifier(index: index, itemID: id))
+    }
+}
+
+// MARK: - Section header
+
+struct ClassicSectionHeader: View {
+    let title: LocalizedStringKey
+    var subtitle: String?
+    var destination: Destination?
+    var action: (() -> Void)?
+
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            if let destination {
+                NavigationLink(value: destination) {
+                    headerTitleContent
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(ClassicAnimation.quick) { isHovering = hovering }
+                }
+            } else if let action {
+                Button(action: action) {
+                    headerTitleContent
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(ClassicAnimation.quick) { isHovering = hovering }
+                }
+            } else {
+                Text(title)
+                    .font(.title2.weight(.semibold))
+            }
+            if let subtitle {
+                Text(subtitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+    }
+
+    private var headerTitleContent: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.primary)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .offset(x: isHovering ? 2 : 0)
+        }
+    }
+}
+
+// MARK: - Badges
+
+struct ClassicPlayCountBadge: View {
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "play.fill")
+                .font(.system(size: 8, weight: .bold))
+            Text(Formatters.playCount(count))
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3.5)
+        .background(.black.opacity(0.35), in: Capsule())
+        .background(.ultraThinMaterial.opacity(0.6), in: Capsule())
+    }
+}
+
+struct ClassicVIPBadge: View {
+    var body: some View {
+        Text("VIP")
+            .font(.system(size: 8.5, weight: .bold))
+            .foregroundStyle(ClassicTheme.accent)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .stroke(ClassicTheme.accent.opacity(0.8), lineWidth: 1)
+            )
+    }
+}
+
+struct ClassicQualityTag: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(ClassicTheme.accent)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .overlay(
+                RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+                    .stroke(ClassicTheme.accent.opacity(0.7), lineWidth: 1)
+            )
+    }
+}
+
+// MARK: - Hover play overlay
+
+struct ClassicPlayOverlayButton: View {
+    var visible: Bool
+    var size: CGFloat = 40
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "play.fill")
+                .font(.system(size: size * 0.38, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(ClassicTheme.accent.opacity(0.92), in: Circle())
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+        }
+        .buttonStyle(.classicPressable)
+        .opacity(visible ? 1 : 0)
+        .allowsHitTesting(visible)
+        .accessibilityHidden(!visible)
+        .scaleEffect(visible ? 1 : 0.7)
+        .animation(ClassicAnimation.spring, value: visible)
+    }
+}
+
+// MARK: - Marquee
+
+/// Scrolls text horizontally when it overflows, with faded edges.
+struct ClassicMarqueeText: View {
+    let text: String
+    var font: Font = .system(size: 13, weight: .medium)
+
+    @State private var textWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+    @State private var offset: CGFloat = 0
+    @State private var animating = false
+
+    private var needsMarquee: Bool { textWidth > containerWidth + 1 }
+
+    var body: some View {
+        GeometryReader { geo in
+            HStack(spacing: 32) {
+                marqueeLabel
+                if needsMarquee {
+                    marqueeLabel
+                }
+            }
+            .offset(x: offset)
+            .frame(maxHeight: .infinity, alignment: .leading)
+            .onAppear { containerWidth = geo.size.width }
+            .onChange(of: geo.size.width) { _, newValue in containerWidth = newValue }
+        }
+        .clipped()
+        .mask(edgeFadeMask)
+        .onChange(of: text) {
+            restart()
+        }
+        .onChange(of: needsMarquee) {
+            restart()
+        }
+        .background(
+            Text(text)
+                .font(font)
+                .fixedSize()
+                .hidden()
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.onAppear { textWidth = geo.size.width }
+                            .onChange(of: geo.size.width) { _, newValue in textWidth = newValue }
+                    }
+                )
+        )
+    }
+
+    private var marqueeLabel: some View {
+        Text(text)
+            .font(font)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    private var edgeFadeMask: some View {
+        LinearGradient(
+            stops: [
+                .init(color: animating ? .clear : .black, location: 0),
+                .init(color: .black, location: animating ? 0.06 : 0),
+                .init(color: .black, location: needsMarquee ? 0.94 : 1),
+                .init(color: needsMarquee ? .clear : .black, location: 1),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        )
+    }
+
+    private func restart() {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            offset = 0
+            animating = false
+        }
+        guard needsMarquee, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let distance = textWidth + 32
+        let duration = Double(distance) / 24
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+            guard needsMarquee else { return }
+            animating = true
+            withAnimation(.linear(duration: duration).repeatForever(autoreverses: false)) {
+                offset = -distance
+            }
+        }
+    }
+}
