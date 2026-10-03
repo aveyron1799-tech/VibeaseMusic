@@ -30,9 +30,9 @@ struct PlayerChromeModifier: ViewModifier {
                 }
             }
             .padding(.top, 12)
-            .padding(.bottom, Theme.Layout.playerBarHeight + 20)
-            .padding(.trailing, 16)
-            .transition(.move(edge: .trailing).combined(with: .opacity))
+            .padding(.bottom, Theme.Layout.playerBarHeight + 24)
+            .padding(.trailing, 18)
+            .transition(.offset(x: 40).combined(with: .opacity))
         }
     }
 }
@@ -82,8 +82,7 @@ struct DestinationsModifier: ViewModifier {
                 }
             }
             .playerContentInset()
-            .background(Color(nsColor: .windowBackgroundColor))
-            .playerChrome()
+            .background { PaperBackground().ignoresSafeArea() }
         }
     }
 }

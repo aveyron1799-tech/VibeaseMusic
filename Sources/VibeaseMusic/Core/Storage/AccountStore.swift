@@ -53,9 +53,13 @@ final class AccountStore {
         }
         refreshCookieIfNeeded()
         do {
-            guard let loadedProfile = try await NeteaseAPI.userAccount(),
-                  requestVersion == sessionVersion,
-                  hasAuthCookie else { return }
+            let loaded = try await NeteaseAPI.userAccount()
+            guard requestVersion == sessionVersion, hasAuthCookie else { return }
+            // An expired MUSIC_U yields a 200 response with a null profile.
+            guard let loadedProfile = loaded else {
+                expireSession()
+                return
+            }
 
             if profile?.userId != loadedProfile.userId {
                 sessionVersion += 1
@@ -63,9 +67,21 @@ final class AccountStore {
             }
             profile = loadedProfile
             await refreshLibrary(for: loadedProfile.userId, version: sessionVersion)
+        } catch NeteaseAPIError.needLogin {
+            guard requestVersion == sessionVersion else { return }
+            expireSession()
         } catch {
             return
         }
+    }
+
+    /// Drops a rejected auth cookie so the app stops presenting a half-logged-in state.
+    private func expireSession() {
+        NeteaseClient.shared.clearAuthCookies()
+        if profile != nil { sessionVersion += 1 }
+        profile = nil
+        clearLibrary()
+        isBootstrapped = true
     }
 
     func refreshLibrary() async {

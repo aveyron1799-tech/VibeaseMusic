@@ -10,12 +10,44 @@ actor ImageCache {
     private let diskURL: URL
     private var inflight: [String: Task<NSImage?, Never>] = [:]
 
+    private static let diskLimitBytes = 300 * 1024 * 1024
+
+    private static var diskDirectory: URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("com.vibease.music/images", isDirectory: true)
+    }
+
     private init() {
         memory.countLimit = 300
         memory.totalCostLimit = 64 * 1024 * 1024
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        diskURL = caches.appendingPathComponent("com.vibease.music/images", isDirectory: true)
+        diskURL = Self.diskDirectory
         try? FileManager.default.createDirectory(at: diskURL, withIntermediateDirectories: true)
+    }
+
+    /// Trims the disk tier to `diskLimitBytes`, evicting least recently used files
+    /// first (disk hits refresh the modification date).
+    nonisolated static func pruneDiskCacheInBackground() {
+        Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            let keys: [URLResourceKey] = [.contentModificationDateKey, .totalFileAllocatedSizeKey, .isRegularFileKey]
+            guard let files = try? fm.contentsOfDirectory(
+                at: diskDirectory, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles]
+            ) else { return }
+            var entries: [(url: URL, date: Date, size: Int)] = []
+            var total = 0
+            for file in files {
+                guard let values = try? file.resourceValues(forKeys: Set(keys)),
+                      values.isRegularFile == true else { continue }
+                let size = values.totalFileAllocatedSize ?? 0
+                total += size
+                entries.append((file, values.contentModificationDate ?? .distantPast, size))
+            }
+            guard total > diskLimitBytes else { return }
+            for entry in entries.sorted(by: { $0.date < $1.date }) {
+                guard total > diskLimitBytes else { break }
+                if (try? fm.removeItem(at: entry.url)) != nil { total -= entry.size }
+            }
+        }
     }
 
     func image(for url: URL) async -> NSImage? {
@@ -29,6 +61,7 @@ actor ImageCache {
         let task = Task<NSImage?, Never> { [diskURL] in
             let fileURL = diskURL.appendingPathComponent(key)
             if let data = try? Data(contentsOf: fileURL), let image = NSImage(data: data) {
+                try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: fileURL.path)
                 return image
             }
             guard let (data, response) = try? await URLSession.shared.data(from: url),
@@ -103,11 +136,11 @@ struct CachedAsyncImage<Placeholder: View>: View {
                 return
             }
             guard url != loadedURL else { return }
-            if let cached = await ImageCache.shared.image(for: url) {
-                guard !Task.isCancelled else { return }
-                image = cached
-                loadedURL = url
-            }
+            let loaded = await ImageCache.shared.image(for: url)
+            guard !Task.isCancelled else { return }
+            // A failed load must clear the previous URL's image rather than keep showing it.
+            image = loaded
+            loadedURL = loaded == nil ? nil : url
         }
     }
 }

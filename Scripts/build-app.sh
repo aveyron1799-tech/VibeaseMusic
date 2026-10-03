@@ -9,7 +9,9 @@ cd "$ROOT"
 
 CONF="${1:-debug}"
 APP_NAME="VibeaseMusic"
-BUNDLE_ID="com.vibease.music"
+# Overridable so side-by-side preview builds don't collide with the real app.
+BUNDLE_ID="${BUNDLE_ID:-com.vibease.music}"
+APP_DISPLAY_NAME="${APP_DISPLAY_NAME:-$APP_NAME}"
 # Version resolution: environment > version.env > defaults.
 ENV_MARKETING_VERSION="${MARKETING_VERSION:-}"
 ENV_BUILD_NUMBER="${BUILD_NUMBER:-}"
@@ -23,7 +25,7 @@ SPARKLE_FEED_URL="https://github.com/missuo/kumone/releases/latest/download/appc
 SPARKLE_PUBLIC_ED_KEY="RHEhllstUuuVrVDCPGrbhg/8LivSzpuZB9X3u3xdV5o="
 
 BUILD_DIR="$ROOT/.build/app"
-APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
+APP_BUNDLE="$BUILD_DIR/$APP_DISPLAY_NAME.app"
 
 # Link against the active SDK so AppKit enables the matching system appearance.
 SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
@@ -81,8 +83,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
     <key>CFBundleIconFile</key><string>VibeaseMusicIcon</string>
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleName</key><string>$APP_NAME</string>
-    <key>CFBundleDisplayName</key><string>$APP_NAME</string>
+    <key>CFBundleName</key><string>$APP_DISPLAY_NAME</string>
+    <key>CFBundleDisplayName</key><string>$APP_DISPLAY_NAME</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$MARKETING_VERSION</string>
     <key>CFBundleVersion</key><string>$BUILD_NUMBER</string>

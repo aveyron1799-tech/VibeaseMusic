@@ -16,17 +16,18 @@ struct AlbumDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 26) {
                 if let album {
                     header(album)
                         .padding(.horizontal, Theme.Layout.contentInset)
-                        .padding(.top, 16)
+                        .padding(.top, 22)
 
                     ForEach(discs, id: \.self) { disc in
                         if discs.count > 1 {
                             Text("Disc \(disc)")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.secondary)
+                                .font(.serif(14, .bold))
+                                .tracking(1.5)
+                                .foregroundStyle(Theme.ink.opacity(0.6))
                                 .padding(.horizontal, Theme.Layout.contentInset)
                                 .padding(.top, 4)
                         }
@@ -56,7 +57,7 @@ struct AlbumDetailView: View {
                         }
                     }
                 } else if isLoading {
-                    ProgressView()
+                    InkLoader(size: 40, color: Theme.ink.opacity(0.55))
                         .frame(maxWidth: .infinity, minHeight: 400)
                 } else if let errorMessage {
                     ErrorStateView(message: errorMessage) {
@@ -66,6 +67,10 @@ struct AlbumDetailView: View {
                 }
                 Color.clear.frame(height: 8)
             }
+        }
+        .background(alignment: .top) {
+            ArtworkWash(url: album?.picUrl?.resizedImageURL(128))
+                .ignoresSafeArea()
         }
         .hoverScrollIndicators()
         .navigationTitle(album?.name ?? String(localized: "专辑"))
@@ -101,33 +106,34 @@ struct AlbumDetailView: View {
     }
 
     private func header(_ album: AlbumDetail) -> some View {
-        HStack(alignment: .bottom, spacing: 24) {
-            CachedAsyncImage(url: album.picUrl?.resizedImageURL(512))
-                .frame(width: 200, height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.large, style: .continuous))
-                .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
+        HStack(alignment: .bottom, spacing: 28) {
+            // An album sleeve with its record peeking out on hover.
+            AlbumSleeve(url: album.picUrl?.resizedImageURL(512))
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(album.subType?.isEmpty == false ? album.subType! : String(localized: "专辑"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
+            VStack(alignment: .leading, spacing: 9) {
+                Eyebrow(text: (album.subType?.isEmpty == false ? album.subType! : String(localized: "专辑")) + " · ALBUM")
                 Text(album.name)
-                    .font(.title.weight(.bold))
+                    .font(.serif(29, .bold))
+                    .foregroundStyle(Theme.ink)
+                    .lineSpacing(3)
                     .lineLimit(2)
 
                 if let artist = album.artist {
                     NavigationLink(value: Destination.artist(artist.id)) {
-                        Text(artist.name)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(Theme.accent)
+                        HStack(spacing: 4) {
+                            Text(artist.name)
+                                .font(.system(size: 13.5, weight: .medium))
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9, weight: .medium))
+                        }
+                        .foregroundStyle(Theme.accent)
                     }
                     .buttonStyle(.plain)
                 }
 
                 Text("\(tracks.count) 首 · \(totalDuration) · \(Formatters.date(fromMS: album.publishTime))")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 11.5).monospacedDigit())
+                    .foregroundStyle(Theme.ink.opacity(0.42))
 
                 if let description = album.description, !description.isEmpty {
                     Button {
@@ -135,7 +141,8 @@ struct AlbumDetailView: View {
                     } label: {
                         Text(description.replacingOccurrences(of: "\n", with: " "))
                             .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.ink.opacity(0.55))
+                            .lineSpacing(2)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                     }
@@ -144,7 +151,9 @@ struct AlbumDetailView: View {
                         ScrollView {
                             Text(description)
                                 .font(.system(size: 13))
-                                .padding(16)
+                                .lineSpacing(4)
+                                .foregroundStyle(Theme.ink)
+                                .padding(18)
                                 .frame(width: 380, alignment: .leading)
                         }
                         .frame(maxHeight: 400)
@@ -158,14 +167,8 @@ struct AlbumDetailView: View {
                         player.play(tracks: tracks, source: .album(albumID))
                     } label: {
                         Label("播放", systemImage: "play.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 8)
-                            .background(Theme.accentGradient, in: Capsule())
-                            .shadow(color: Theme.accent.opacity(0.3), radius: 6, y: 2)
                     }
-                    .buttonStyle(.pressable)
+                    .buttonStyle(.ink)
 
                     if account.isLoggedIn {
                         Button {
@@ -173,12 +176,9 @@ struct AlbumDetailView: View {
                         } label: {
                             Label(isSubscribed ? String(localized: "已收藏") : String(localized: "收藏"),
                                   systemImage: isSubscribed ? "checkmark" : "plus")
-                                .font(.system(size: 13, weight: .medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background(.primary.opacity(0.06), in: Capsule())
+                                .contentTransition(.symbolEffect(.replace))
                         }
-                        .buttonStyle(.pressable)
+                        .buttonStyle(.inkOutline)
                     }
                 }
             }
@@ -194,8 +194,13 @@ struct AlbumDetailView: View {
                 Text(company)
             }
         }
-        .font(.system(size: 11.5))
-        .foregroundStyle(.tertiary)
+        .font(.serif(11.5))
+        .tracking(1)
+        .foregroundStyle(Theme.ink.opacity(0.4))
+        .padding(.leading, 10)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(Theme.accent.opacity(0.6)).frame(width: 1.5)
+        }
     }
 
     private var totalDuration: String {
@@ -212,5 +217,33 @@ struct AlbumDetailView: View {
                 ToastCenter.shared.show(error.localizedDescription)
             }
         }
+    }
+}
+
+/// Album cover as a sleeve with its record peeking out; hovering draws it further out.
+private struct AlbumSleeve: View {
+    let url: URL?
+    @State private var isHovering = false
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            ZStack {
+                Circle().fill(Color(red: 0.1, green: 0.09, blue: 0.08))
+                ForEach(0..<5, id: \.self) { ring in
+                    Circle()
+                        .strokeBorder(.white.opacity(0.05), lineWidth: 0.6)
+                        .padding(CGFloat(14 + ring * 12))
+                }
+                Circle().fill(Theme.accent).frame(width: 52, height: 52)
+                Circle().fill(Theme.paper).frame(width: 6, height: 6)
+            }
+            .frame(width: 186, height: 186)
+            .rotationEffect(.degrees(isHovering ? 60 : 0))
+            .offset(x: isHovering ? 66 : 40)
+            CoverArtwork(url: url, size: 200, lifted: true)
+        }
+        .frame(width: 256, height: 200, alignment: .leading)
+        .onHover { isHovering = $0 }
+        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: isHovering)
     }
 }

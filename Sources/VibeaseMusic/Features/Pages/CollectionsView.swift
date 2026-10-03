@@ -17,19 +17,25 @@ struct CollectionsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                Picker("", selection: $tab) {
-                    ForEach(Tab.allCases) { tab in
-                        Text(LocalizedStringKey(tab.rawValue)).tag(tab)
+                PageMasthead(title: Text("我的收藏"))
+                    .padding(.horizontal, Theme.Layout.contentInset)
+                    .padding(.top, 14)
+
+                HStack(spacing: 8) {
+                    ForEach(Tab.allCases) { item in
+                        Button {
+                            tab = item
+                        } label: {
+                            Text(LocalizedStringKey(item.rawValue))
+                        }
+                        .buttonStyle(.chip(isSelected: tab == item))
+                        .accessibilityAddTraits(tab == item ? .isSelected : [])
                     }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 180)
                 .padding(.horizontal, Theme.Layout.contentInset)
-                .padding(.top, 12)
 
                 if isLoading, account.likedAlbums.isEmpty, account.likedArtists.isEmpty {
-                    ProgressView()
+                    InkLoader()
                         .frame(maxWidth: .infinity, minHeight: 300)
                 } else {
                     switch tab {
@@ -57,20 +63,11 @@ struct CollectionsView: View {
                             EmptyStateView(icon: "music.microphone", title: "还没有关注歌手")
                                 .frame(minHeight: 300)
                         } else {
-                            CardGrid(minWidth: 140) {
+                            CardGrid(minWidth: 148) {
                                 ForEach(account.likedArtists) { artist in
                                     NavigationLink(value: Destination.artist(artist.id)) {
-                                        VStack(spacing: 10) {
-                                            CachedAsyncImage(url: artist.picUrl?.resizedImageURL(256))
-                                                .frame(width: 128, height: 128)
-                                                .clipShape(Circle())
-                                            Text(artist.name)
-                                                .font(.system(size: 13, weight: .medium))
-                                                .foregroundStyle(.primary)
-                                                .lineLimit(1)
-                                        }
-                                        .frame(width: 140)
-                                        .contentShape(Rectangle())
+                                        ArtistPortrait(url: artist.picUrl?.resizedImageURL(256),
+                                                       name: artist.name, size: 128)
                                     }
                                     .buttonStyle(.interactiveCard)
                                 }

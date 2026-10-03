@@ -4,6 +4,9 @@ struct PlayerBar: View {
     @Environment(PlayerService.self) private var player
     @Environment(AccountStore.self) private var account
 
+    @State private var artworkHover = false
+    @State private var playPresses = 0
+
     var body: some View {
         GeometryReader { proxy in
             let compact = proxy.size.width < 860
@@ -19,10 +22,9 @@ struct PlayerBar: View {
             .padding(.horizontal, 14)
         }
         .frame(height: Theme.Layout.playerBarHeight)
-        .compatGlass(interactive: true, in: Capsule())
-        .overlay(Capsule().strokeBorder(.primary.opacity(0.06), lineWidth: 0.5))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
+        .compatGlass(interactive: true, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+        .padding(.horizontal, 18)
+        .padding(.bottom, 12)
         .background(alignment: .bottom) { bottomFade }
     }
 
@@ -40,9 +42,9 @@ struct PlayerBar: View {
                         VIPBadge()
                     }
                 }
-                Text(player.currentTrack?.artistNames ?? "VibeaseMusic")
+                Text(player.currentTrack?.artistNames ?? "静候一曲")
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.ink.opacity(0.55))
                     .lineLimit(1)
                     .help(player.currentTrack?.artistNames ?? "VibeaseMusic")
             }
@@ -60,14 +62,35 @@ struct PlayerBar: View {
                 player.showNowPlaying = true
             }
         } label: {
-            CachedAsyncImage(url: player.currentTrack?.album.picUrl?.resizedImageURL(128))
-                .frame(width: 38, height: 38)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
-                        .strokeBorder(.primary.opacity(0.1), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+            ZStack {
+                if player.hasCurrentTrack {
+                    CachedAsyncImage(url: player.currentTrack?.album.picUrl?.resizedImageURL(128))
+                        .frame(width: 40, height: 40)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                                .strokeBorder(Theme.hairline, lineWidth: 0.75)
+                        )
+                        .shadow(color: Theme.shadow, radius: 4, y: 2)
+                } else {
+                    Enso(lineWidth: 2.4, color: Theme.ink.opacity(0.4))
+                        .frame(width: 34, height: 34)
+                        .frame(width: 40, height: 40)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if player.hasCurrentTrack {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(.black.opacity(artworkHover ? 0.35 : 0),
+                                    in: RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous))
+                        .opacity(artworkHover ? 1 : 0)
+                }
+            }
+            .onHover { artworkHover = $0 }
+            .animation(AppAnimation.quick, value: artworkHover)
         }
         .buttonStyle(.pressable)
         .help("打开播放页")
@@ -104,7 +127,7 @@ struct PlayerBar: View {
                 }
 
                 if player.isFMMode {
-                    Image(systemName: "wave.3.right.circle.fill")
+                    Image(systemName: "wind")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.accent)
                         .frame(width: 26, height: 26)
@@ -127,28 +150,28 @@ struct PlayerBar: View {
 
     private var playPauseButton: some View {
         Button {
+            playPresses += 1
             player.togglePlayPause()
         } label: {
             ZStack {
                 Circle()
-                    .fill(Theme.accentGradient)
-                    .frame(width: 30, height: 30)
-                    .shadow(color: Theme.accent.opacity(0.35), radius: 5, y: 1)
+                    .fill(Theme.ink)
+                    .frame(width: 32, height: 32)
+                    .shadow(color: Theme.shadow, radius: 4, y: 2)
                 if player.isBuffering && player.isPlaying {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.white)
-                        .scaleEffect(0.7)
+                    InkLoader(size: 16, color: Theme.onInk)
                 } else {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 12.5, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.onInk)
+                        .offset(x: player.isPlaying ? 0 : 1)
                         .contentTransition(.symbolEffect(.replace))
                 }
             }
+            .inkBloom(trigger: playPresses, color: Theme.ink, scale: 2.2)
         }
         .buttonStyle(.pressable)
-        .padding(.horizontal, 2)
+        .padding(.horizontal, 4)
     }
 
     // MARK: - Right: quality / panels / volume
@@ -191,13 +214,10 @@ struct PlayerBar: View {
 
     private var bottomFade: some View {
         LinearGradient(
-            colors: [
-                Color(nsColor: .windowBackgroundColor).opacity(0),
-                Color(nsColor: .windowBackgroundColor).opacity(0.25),
-            ],
+            colors: [Theme.paper.opacity(0), Theme.paper.opacity(0.85)],
             startPoint: .top, endPoint: .bottom
         )
-        .frame(height: 50)
+        .frame(height: 64)
         .padding(.horizontal, -16)
         .allowsHitTesting(false)
     }
@@ -210,21 +230,26 @@ struct PlayerIconButton: View {
     var size: CGFloat = 14
     var isActive = false
     var disabled = false
+    var showsActiveDot = true
     let action: () -> Void
 
     @State private var isHovering = false
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: size, weight: .medium))
-                .foregroundStyle(isActive ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.primary))
+                .foregroundStyle(isActive ? Theme.accent : Theme.ink.opacity(isHovering ? 0.95 : 0.72))
                 .frame(width: 26, height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(backgroundColor)
-                )
+                .background(Circle().fill(isHovering && !disabled ? Theme.wash : .clear))
+                .overlay(alignment: .bottom) {
+                    Circle()
+                        .fill(Theme.accent)
+                        .frame(width: 3, height: 3)
+                        .offset(y: 2)
+                        .opacity(isActive && showsActiveDot ? 1 : 0)
+                        .scaleEffect(isActive ? 1 : 0.1)
+                }
                 .contentShape(Rectangle())
         }
         .buttonStyle(.pressable)
@@ -232,41 +257,71 @@ struct PlayerIconButton: View {
         .opacity(disabled ? 0.35 : 1)
         .onHover { isHovering = $0 }
         .animation(AppAnimation.quick, value: isHovering)
-    }
-
-    private var backgroundColor: Color {
-        let base: Color = colorScheme == .dark ? .white : .black
-        if isHovering, !disabled { return base.opacity(0.08) }
-        if isActive { return base.opacity(0.05) }
-        return .clear
+        .animation(AppAnimation.bouncy, value: isActive)
     }
 }
 
 // MARK: - Like button
 
+/// Liking a song stamps it: the heart lands with a thud, vermilion ink blooms
+/// beneath it, and a tiny 藏 ("kept") seal floats up and fades.
 struct LikeButton: View {
     let trackID: Int
     var size: CGFloat = 13
+    var restingColor: Color = Theme.ink.opacity(0.72)
+    var diameter: CGFloat = 26
 
     @Environment(AccountStore.self) private var account
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var stamps = 0
+    @State private var landing = false
+    @State private var sealRising = false
+    @State private var isHovering = false
 
     var body: some View {
         let liked = account.isLiked(trackID)
-        PlayerIconButton(
-            icon: liked ? "heart.fill" : "heart", size: size,
-            isActive: liked
-        ) {
+        Button {
+            if !liked { stamp() }
             Task { await account.toggleLike(trackID: trackID) }
+        } label: {
+            Image(systemName: liked ? "heart.fill" : "heart")
+                .font(.system(size: size, weight: .medium))
+                .foregroundStyle(liked ? Theme.accent : restingColor)
+                .scaleEffect(landing ? 1.45 : 1)
+                .rotationEffect(.degrees(landing ? -12 : 0))
+                .frame(width: diameter, height: diameter)
+                .background(Circle().fill(isHovering ? Theme.wash : .clear))
+                .inkBloom(trigger: stamps, color: Theme.accent, scale: 2.6)
+                .overlay {
+                    SealStamp(text: "藏", size: 14)
+                        .offset(y: sealRising ? -26 : -8)
+                        .opacity(sealRising ? 0 : (stamps > 0 && landing ? 1 : 0))
+                        .allowsHitTesting(false)
+                }
+                .contentShape(Circle())
         }
+        .buttonStyle(.pressable)
+        .onHover { isHovering = $0 }
+        .animation(AppAnimation.quick, value: isHovering)
         .help(liked ? String(localized: "取消喜欢") : String(localized: "喜欢"))
+    }
+
+    private func stamp() {
+        guard !reduceMotion else { return }
+        stamps += 1
+        sealRising = false
+        landing = true
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.45)) { landing = false }
+        withAnimation(.easeOut(duration: 1.1).delay(0.05)) { sealRising = true }
     }
 }
 
 // MARK: - Scrubber
 
+/// A hairline drawn in ink. The playhead is a vermilion dot that swells
+/// while hovered; dragging shows the time on a small paper slip.
 struct ScrubberLane: View {
     @Environment(PlayerService.self) private var player
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var isHovering = false
     @State private var isDragging = false
@@ -289,29 +344,43 @@ struct ScrubberLane: View {
 
     private func timeLabel(_ value: TimeInterval) -> some View {
         Text(Formatters.duration(value))
-            .font(.system(size: 10).monospacedDigit())
-            .foregroundStyle(.secondary)
+            .font(.system(size: 9.5).monospacedDigit())
+            .foregroundStyle(Theme.ink.opacity(0.5))
             .frame(width: 34)
     }
 
     private var track: some View {
         GeometryReader { geo in
             let width = geo.size.width
+            let lineHeight: CGFloat = isHovering || isDragging ? 3 : 1.5
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.18) : .black.opacity(0.15))
-                    .frame(height: 3.5)
+                    .fill(Theme.ink.opacity(0.12))
+                    .frame(height: lineHeight)
                 Capsule()
-                    .fill(Theme.accent)
-                    .frame(width: max(3.5, width * fraction), height: 3.5)
+                    .fill(Theme.ink.opacity(0.78))
+                    .frame(width: max(lineHeight, width * fraction), height: lineHeight)
                 Circle()
-                    .fill(.white)
+                    .fill(Theme.accent)
                     .frame(width: thumbDiameter, height: thumbDiameter)
-                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 0.5)
+                    .shadow(color: Theme.accent.opacity(isDragging ? 0.45 : 0), radius: 4)
                     .offset(x: width * fraction - thumbDiameter / 2)
-                    .opacity(isHovering || isDragging ? 1 : 0)
+                    .opacity(player.hasCurrentTrack ? 1 : 0)
             }
             .frame(maxHeight: .infinity)
+            .overlay(alignment: .topLeading) {
+                if isDragging {
+                    Text(Formatters.duration(dragProgress))
+                        .font(.system(size: 10, weight: .medium).monospacedDigit())
+                        .foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .compatGlass(in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                        .fixedSize()
+                        .offset(x: min(max(width * fraction - 18, -8), width - 28), y: -22)
+                        .transition(.opacity)
+                }
+            }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -322,9 +391,12 @@ struct ScrubberLane: View {
                         dragProgress = min(max(value.location.x / width, 0), 1) * player.duration
                     }
                     .onEnded { _ in
+                        defer {
+                            isDragging = false
+                            player.isScrubbing = false
+                        }
+                        guard isDragging else { return }
                         player.seek(to: dragProgress)
-                        isDragging = false
-                        player.isScrubbing = false
                     }
             )
         }
@@ -332,11 +404,18 @@ struct ScrubberLane: View {
         .onHover { hovering in
             withAnimation(AppAnimation.quick) { isHovering = hovering }
         }
+        .onDisappear {
+            if isDragging {
+                isDragging = false
+                player.isScrubbing = false
+            }
+        }
         .animation(.spring(response: 0.24, dampingFraction: 0.72), value: isDragging)
+        .animation(AppAnimation.quick, value: isHovering)
     }
 
     private var thumbDiameter: CGFloat {
-        isDragging ? 12 : (isHovering ? 10 : 8)
+        isDragging ? 11 : (isHovering ? 9 : 5)
     }
 }
 
@@ -370,7 +449,6 @@ struct VolumeControl: View {
 
 struct VolumeSlider: View {
     @Environment(PlayerService.self) private var player
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         @Bindable var player = player
@@ -378,11 +456,15 @@ struct VolumeSlider: View {
             let height = geo.size.height
             ZStack(alignment: .bottom) {
                 Capsule()
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.18) : .black.opacity(0.15))
-                    .frame(width: 4)
+                    .fill(Theme.ink.opacity(0.12))
+                    .frame(width: 3)
                 Capsule()
+                    .fill(Theme.ink.opacity(0.78))
+                    .frame(width: 3, height: max(3, height * CGFloat(player.volume)))
+                Circle()
                     .fill(Theme.accent)
-                    .frame(width: 4, height: max(4, height * CGFloat(player.volume)))
+                    .frame(width: 9, height: 9)
+                    .offset(y: -max(0, height * CGFloat(player.volume) - 4.5))
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())

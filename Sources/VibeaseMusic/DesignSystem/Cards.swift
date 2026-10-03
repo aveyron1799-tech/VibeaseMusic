@@ -3,6 +3,32 @@ import SwiftUI
 
 // MARK: - Cover card (playlists / albums)
 
+/// Artwork mounted like a print: thin ink edge, resting flat on the paper,
+/// casting a soft warm shadow once lifted.
+struct CoverArtwork: View {
+    let url: URL?
+    var size: CGFloat = Theme.Layout.cardSize
+    var lifted = false
+    var cornerRadius: CGFloat = Theme.Radius.standard
+
+    var body: some View {
+        CachedAsyncImage(url: url)
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Theme.hairline, lineWidth: 0.75)
+            )
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Theme.sheet)
+                    .shadow(color: Theme.shadow.opacity(lifted ? 1.1 : 0.45),
+                            radius: lifted ? 14 : 3, y: lifted ? 9 : 1.5)
+            )
+            .animation(AppAnimation.spring, value: lifted)
+    }
+}
+
 struct CoverCard: View {
     let coverURL: URL?
     let title: String
@@ -16,32 +42,49 @@ struct CoverCard: View {
 
     var body: some View {
         Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .bottomLeading) {
-                    CachedAsyncImage(url: coverURL)
-                        .frame(width: size, height: size)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
-                                .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
-                        )
-                    if playCount > 0 {
-                        PlayCountBadge(count: playCount)
-                            .padding(6)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    }
-                    if let onPlay {
-                        PlayOverlayButton(visible: isHovering, action: onPlay)
-                            .padding(8)
-                    }
-                }
-                .frame(width: size, height: size)
+            CoverCardBody(coverURL: coverURL, title: title, subtitle: subtitle,
+                          playCount: playCount, size: size, lifted: isHovering)
+        }
+        .buttonStyle(.interactiveCard)
+        .overlay(alignment: .topLeading) {
+            if let onPlay {
+                PlayOverlayButton(visible: isHovering, action: onPlay)
+                    .padding(10)
+                    .frame(width: size, height: size, alignment: .bottomTrailing)
+                    .offset(y: isHovering ? -3 : 0)
+            }
+        }
+        .onHover { isHovering = $0 }
+    }
+}
 
+/// Card body without its own Button wrapper (for use inside NavigationLink).
+struct CoverCardBody: View {
+    let coverURL: URL?
+    let title: String
+    var subtitle: String?
+    var playCount: Int = 0
+    var size: CGFloat = Theme.Layout.cardSize
+    var lifted = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            ZStack(alignment: .topTrailing) {
+                CoverArtwork(url: coverURL, size: size, lifted: lifted)
+                if playCount > 0 {
+                    PlayCountBadge(count: playCount)
+                        .padding(7)
+                }
+            }
+            .frame(width: size, height: size)
+
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12.5, weight: .medium))
+                    .lineSpacing(2)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Theme.ink.opacity(0.92))
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.system(size: 11))
@@ -49,11 +92,10 @@ struct CoverCard: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(width: size, alignment: .leading)
-            .contentShape(Rectangle())
+            .frame(maxWidth: size, alignment: .leading)
         }
-        .buttonStyle(.interactiveCard)
-        .onHover { isHovering = $0 }
+        .frame(width: size, alignment: .leading)
+        .contentShape(Rectangle())
     }
 }
 
@@ -76,15 +118,18 @@ struct NavigationCoverCard: View {
                     coverURL: coverURL,
                     title: title,
                     subtitle: subtitle,
-                    playCount: playCount
+                    playCount: playCount,
+                    lifted: isHovering
                 )
             }
             .buttonStyle(.interactiveCard)
 
             if let onPlay {
                 PlayOverlayButton(visible: isHovering, action: onPlay)
-                    .padding(8)
-                    .frame(width: Theme.Layout.cardSize, height: Theme.Layout.cardSize, alignment: .bottomLeading)
+                    .padding(10)
+                    .frame(width: Theme.Layout.cardSize, height: Theme.Layout.cardSize, alignment: .bottomTrailing)
+                    .offset(y: isHovering ? -3 : 0)
+                    .animation(AppAnimation.spring, value: isHovering)
                     .zIndex(1)
             }
         }
@@ -96,25 +141,47 @@ struct NavigationCoverCard: View {
 
 struct ArtistCard: View {
     let artist: ArtistSummary
-    var size: CGFloat = 128
+    var size: CGFloat = 124
     let onOpen: () -> Void
 
     var body: some View {
         Button(action: onOpen) {
-            VStack(spacing: 10) {
-                CachedAsyncImage(url: artist.picUrl?.resizedImageURL(256))
-                    .frame(width: size, height: size)
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
-                Text(artist.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-                    .foregroundStyle(.primary)
-            }
-            .frame(width: size + 12)
-            .contentShape(Rectangle())
+            ArtistPortrait(url: artist.picUrl?.resizedImageURL(256), name: artist.name, size: size)
         }
         .buttonStyle(.interactiveCard)
+    }
+}
+
+/// Round portrait with an ensō that is brushed around it on hover.
+struct ArtistPortrait: View {
+    let url: URL?
+    let name: String
+    var size: CGFloat = 124
+
+    @State private var isHovering = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            CachedAsyncImage(url: url)
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 0.75))
+                .shadow(color: Theme.shadow.opacity(isHovering ? 0.9 : 0.3), radius: isHovering ? 12 : 3,
+                        y: isHovering ? 7 : 1)
+                .overlay {
+                    Enso(progress: isHovering ? 1 : 0, lineWidth: 3.2, color: Theme.ink.opacity(0.85))
+                        .frame(width: size + 18, height: size + 18)
+                        .animation(isHovering ? .easeOut(duration: 0.7) : .easeIn(duration: 0.2), value: isHovering)
+                }
+            Text(name)
+                .font(.serif(14, .medium))
+                .lineLimit(1)
+                .foregroundStyle(Theme.ink)
+        }
+        .frame(width: size + 20)
+        .padding(.top, 9)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
     }
 }
 
@@ -126,28 +193,28 @@ struct Shelf<Content: View>: View {
     let title: LocalizedStringKey
     var destination: Destination?
     var seeAll: (() -> Void)?
-    var spacing: CGFloat = 16
+    var spacing: CGFloat = 22
     @ViewBuilder var content: () -> Content
 
     @State private var isHovering = false
     @State private var pageRequest = 0
 
-    private var contentHeight: CGFloat { Theme.Layout.cardSize + 60 }
+    private var contentHeight: CGFloat { Theme.Layout.cardSize + 86 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 SectionHeader(title: title, destination: destination, action: seeAll)
                 if let destination {
                     Spacer()
                     NavigationLink(value: destination) {
-                        HStack(spacing: 3) {
+                        HStack(spacing: 4) {
                             Text("全部")
-                                .font(.system(size: 12, weight: .medium))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(size: 11.5))
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 9.5, weight: .medium))
                         }
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.ink.opacity(0.5))
                     }
                     .buttonStyle(.plain)
                 }
@@ -160,6 +227,8 @@ struct Shelf<Content: View>: View {
                     content()
                     Spacer().frame(width: Theme.Layout.contentInset - spacing)
                 }
+                // Room for cards to lift without their shadow being clipped.
+                .padding(.top, 8)
             }
             .frame(height: contentHeight)
             .overlay(alignment: .leading) { pagerButton(direction: -1) }
@@ -172,20 +241,20 @@ struct Shelf<Content: View>: View {
         Button {
             pageRequest += direction
         } label: {
-            Text(direction < 0 ? "←" : "→")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 30, height: 30)
+            Image(systemName: direction < 0 ? "arrow.left" : "arrow.right")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.ink)
+                .frame(width: 32, height: 32)
                 .compatGlass(interactive: true, in: Circle())
-                .overlay(Circle().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .opacity(isHovering ? 1 : 0)
+        .offset(x: isHovering ? 0 : CGFloat(direction) * 8)
         .allowsHitTesting(isHovering)
-        .animation(AppAnimation.quick, value: isHovering)
-        .padding(.horizontal, 6)
+        .animation(AppAnimation.spring, value: isHovering)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 64)
     }
 }
 
@@ -319,8 +388,8 @@ struct CardGrid<Content: View>: View {
     var body: some View {
         LazyVGrid(
             columns: [GridItem(.adaptive(minimum: minWidth, maximum: minWidth + 40),
-                               spacing: 20, alignment: .top)],
-            alignment: .leading, spacing: 24
+                               spacing: 22, alignment: .top)],
+            alignment: .leading, spacing: 30
         ) {
             content()
         }
@@ -334,15 +403,23 @@ struct ErrorStateView: View {
     let retry: () -> Void
 
     var body: some View {
-        ContentUnavailableView {
-            Label("加载失败", systemImage: "wifi.exclamationmark")
-        } description: {
-            Text(message)
-        } actions: {
+        VStack(spacing: 18) {
+            Enso(progress: 0.72, lineWidth: 5, color: Theme.ink.opacity(0.55))
+                .frame(width: 70, height: 70)
+            VStack(spacing: 6) {
+                Text("加载失败")
+                    .font(.serif(18, .bold))
+                    .foregroundStyle(Theme.ink)
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
             Button("重试", action: retry)
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
+                .buttonStyle(.ink)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
     }
 }
 
@@ -352,15 +429,20 @@ struct EmptyStateView: View {
     var subtitle: LocalizedStringKey?
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 40))
-                .foregroundStyle(.tertiary)
+        VStack(spacing: 16) {
+            ZStack {
+                Enso(lineWidth: 4.5, color: Theme.ink.opacity(0.35))
+                    .frame(width: 84, height: 84)
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundStyle(Theme.ink.opacity(0.5))
+            }
             Text(title)
-                .font(.headline)
+                .font(.serif(17, .bold))
+                .foregroundStyle(Theme.ink)
             if let subtitle {
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
         }

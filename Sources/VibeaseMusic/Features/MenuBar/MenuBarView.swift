@@ -36,36 +36,31 @@ struct MenuBarPlayerView: View {
                 emptyStateSection
             }
 
-            Divider()
-                .padding(.horizontal, -12)
+            Rectangle()
+                .fill(Theme.hairline)
+                .frame(height: 0.75)
+                .padding(.horizontal, -14)
 
             bottomToolbarSection
         }
         .padding(14)
         .frame(width: 320)
-        .background(.ultraThinMaterial)
+        .foregroundStyle(Theme.ink)
+        .background { PaperBackground().ignoresSafeArea() }
     }
 
     // MARK: - Track Info
 
     private func trackInfoSection(track: Track) -> some View {
         HStack(spacing: 10) {
-            CachedAsyncImage(url: track.album.picUrl?.resizedImageURL(128)) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(.quaternary)
-                    Image(systemName: "music.note")
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .frame(width: 46, height: 46)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+            CoverArtwork(url: track.album.picUrl?.resizedImageURL(128), size: 46,
+                         cornerRadius: Theme.Radius.small)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(track.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.serif(14, .bold))
+                        .foregroundStyle(Theme.ink)
                         .lineLimit(1)
                     if track.fee == 1 {
                         VIPBadge()
@@ -74,7 +69,7 @@ struct MenuBarPlayerView: View {
 
                 Text(track.artistNames)
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.ink.opacity(0.55))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -91,11 +86,11 @@ struct MenuBarPlayerView: View {
             HStack {
                 Text(Formatters.duration(player.progress))
                     .font(.system(size: 9.5).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.ink.opacity(0.5))
                 Spacer()
                 Text(Formatters.duration(player.duration))
                     .font(.system(size: 9.5).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.ink.opacity(0.5))
             }
         }
     }
@@ -110,9 +105,9 @@ struct MenuBarPlayerView: View {
             } label: {
                 Image(systemName: "shuffle")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(player.shuffleEnabled ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(player.shuffleEnabled ? Theme.accent : Theme.ink.opacity(0.55))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .help("随机播放")
 
             // Previous
@@ -121,9 +116,9 @@ struct MenuBarPlayerView: View {
             } label: {
                 Image(systemName: "backward.fill")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Theme.ink.opacity(0.85))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .disabled(!player.hasCurrentTrack)
             .help("上一首")
 
@@ -133,23 +128,22 @@ struct MenuBarPlayerView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Theme.accentGradient)
+                        .fill(Theme.ink)
                         .frame(width: 34, height: 34)
-                        .shadow(color: Theme.accent.opacity(0.3), radius: 4, y: 1)
+                        .shadow(color: Theme.shadow, radius: 4, y: 2)
 
                     if player.isBuffering && player.isPlaying {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(.white)
-                            .scaleEffect(0.65)
+                        InkLoader(size: 16, color: Theme.onInk)
                     } else {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Theme.onInk)
+                            .offset(x: player.isPlaying ? 0 : 1)
+                            .contentTransition(.symbolEffect(.replace))
                     }
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .disabled(!player.hasCurrentTrack)
             .help(player.isPlaying ? "暂停" : "播放")
 
@@ -159,9 +153,9 @@ struct MenuBarPlayerView: View {
             } label: {
                 Image(systemName: "forward.fill")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Theme.ink.opacity(0.85))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .disabled(!player.hasCurrentTrack)
             .help("下一首")
 
@@ -171,9 +165,9 @@ struct MenuBarPlayerView: View {
             } label: {
                 Image(systemName: player.repeatMode == .one ? "repeat.1" : "repeat")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(player.repeatMode != .off ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(player.repeatMode != .off ? Theme.accent : Theme.ink.opacity(0.55))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .help("循环模式")
         }
         .padding(.vertical, 2)
@@ -186,19 +180,19 @@ struct MenuBarPlayerView: View {
         return HStack(spacing: 8) {
             Image(systemName: volumeIcon)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.ink.opacity(0.55))
                 .frame(width: 14)
 
             Slider(value: Binding(
                 get: { Double(player.volume) },
                 set: { player.volume = Float($0) }
             ), in: 0...1)
-            .tint(Theme.accent)
+            .tint(Theme.ink.opacity(0.78))
             .controlSize(.mini)
 
             Text("\(Int(player.volume * 100))%")
                 .font(.system(size: 9.5).monospacedDigit())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Theme.ink.opacity(0.5))
                 .frame(width: 28, alignment: .trailing)
         }
         .padding(.horizontal, 2)
@@ -216,28 +210,28 @@ struct MenuBarPlayerView: View {
     // MARK: - Empty State
 
     private var emptyStateSection: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "music.quarternote.3")
-                .font(.system(size: 28))
-                .foregroundStyle(.tertiary)
+        VStack(spacing: 10) {
+            ZStack {
+                Enso(lineWidth: 3.5, color: Theme.ink.opacity(0.35))
+                    .frame(width: 58, height: 58)
+                Image(systemName: "music.note")
+                    .font(.system(size: 17, weight: .light))
+                    .foregroundStyle(Theme.ink.opacity(0.5))
+            }
             Text("暂无播放中的歌曲")
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(.secondary)
+                .font(.serif(14, .bold))
+                .foregroundStyle(Theme.ink.opacity(0.8))
 
             HStack(spacing: 10) {
                 Button("私人漫游") {
                     player.startFM()
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .tint(Theme.accent)
+                .buttonStyle(.inkOutline)
 
                 Button("打开主界面") {
                     WindowManager.showMainWindow()
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(Theme.accent)
+                .buttonStyle(.ink)
             }
             .padding(.top, 4)
         }
@@ -255,8 +249,8 @@ struct MenuBarPlayerView: View {
                 Label("打开主界面", systemImage: "macwindow")
                     .font(.system(size: 11))
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.primary)
+            .buttonStyle(.pressable)
+            .foregroundStyle(Theme.ink.opacity(0.8))
 
             Spacer()
 
@@ -265,18 +259,18 @@ struct MenuBarPlayerView: View {
             } label: {
                 Label("桌面歌词", systemImage: settings.showDesktopLyrics ? "text.badge.checkmark" : "text.bubble")
                     .font(.system(size: 11))
-                    .foregroundStyle(settings.showDesktopLyrics ? Theme.accent : .secondary)
+                    .foregroundStyle(settings.showDesktopLyrics ? Theme.accent : Theme.ink.opacity(0.55))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
 
             Button {
                 NSApp.terminate(nil)
             } label: {
                 Image(systemName: "power")
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.ink.opacity(0.55))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.pressable)
             .help("退出 VibeaseMusic")
         }
         .padding(.horizontal, 2)
@@ -287,8 +281,8 @@ struct MenuBarPlayerView: View {
 
 private struct MenuBarScrubber: View {
     @Environment(PlayerService.self) private var player
-    @Environment(\.colorScheme) private var colorScheme
 
+    @State private var isHovering = false
     @State private var isDragging = false
     @State private var dragProgress: Double = 0
 
@@ -301,17 +295,27 @@ private struct MenuBarScrubber: View {
     var body: some View {
         GeometryReader { geo in
             let width = geo.size.width
+            let lineHeight: CGFloat = isHovering || isDragging ? 3 : 1.5
+            let thumb: CGFloat = isHovering || isDragging ? 8 : 5
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.12))
-                    .frame(height: 3.5)
+                    .fill(Theme.ink.opacity(0.12))
+                    .frame(height: lineHeight)
 
                 Capsule()
+                    .fill(Theme.ink.opacity(0.78))
+                    .frame(width: max(0, width * CGFloat(fraction)), height: lineHeight)
+
+                Circle()
                     .fill(Theme.accent)
-                    .frame(width: max(0, width * CGFloat(fraction)), height: 3.5)
+                    .frame(width: thumb, height: thumb)
+                    .offset(x: width * CGFloat(fraction) - thumb / 2)
+                    .opacity(player.hasCurrentTrack ? 1 : 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
+            .onHover { isHovering = $0 }
+            .animation(AppAnimation.quick, value: isHovering || isDragging)
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in

@@ -114,7 +114,6 @@ final class SearchViewModel {
 struct SearchView: View {
     let query: String
 
-    @Environment(\.colorScheme) private var colorScheme
     @State private var model: SearchViewModel
     @Environment(PlayerService.self) private var player
 
@@ -126,37 +125,30 @@ struct SearchView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                HStack(spacing: 4) {
-                    ForEach(SearchViewModel.Tab.allCases) { tab in
-                        Button {
-                            model.tab = tab
-                        } label: {
-                            Text(LocalizedStringKey(tab.rawValue))
-                                .font(.system(size: 13, weight: model.tab == tab ? .semibold : .medium))
-                                .foregroundStyle(model.tab == tab ? (colorScheme == .dark ? Theme.accent : Theme.accentDeep) : .primary)
-                                .frame(width: 60, height: 32)
-                                .background {
-                                    if model.tab == tab {
-                                        Capsule()
-                                            .fill(Theme.accent.opacity(0.13))
-                                            .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.2), lineWidth: 0.5))
-                                    }
-                                }
-                                .contentShape(Capsule())
+                VStack(alignment: .leading, spacing: 16) {
+                    PageMasthead(title: Text(verbatim: query), caption: Text("搜索"))
+                    HStack(spacing: 22) {
+                        ForEach(SearchViewModel.Tab.allCases) { tab in
+                            SearchTabButton(title: LocalizedStringKey(tab.rawValue),
+                                            isSelected: model.tab == tab) {
+                                model.tab = tab
+                            }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(model.tab == tab ? .isSelected : [])
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("搜索分类")
+                    .padding(.bottom, 2)
+                    .background(alignment: .bottom) {
+                        Rectangle()
+                            .fill(Theme.hairline)
+                            .frame(height: 0.75)
                     }
                 }
-                .padding(5)
-                .compatGlass(interactive: true, in: Capsule())
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("搜索分类")
                 .padding(.horizontal, Theme.Layout.contentInset)
-                .padding(.top, 16)
+                .padding(.top, 14)
 
                 if model.isLoading, currentEmpty {
-                    ProgressView()
+                    InkLoader()
                         .frame(maxWidth: .infinity, minHeight: 300)
                 } else if let errorMessage = model.errorMessage, currentEmpty {
                     ErrorStateView(message: errorMessage) {
@@ -225,7 +217,7 @@ struct SearchView: View {
             TrackListView(tracks: model.songs)
                 .padding(.horizontal, Theme.Layout.contentInset - 10)
         case .artists:
-            CardGrid(minWidth: 140) {
+            CardGrid(minWidth: 148) {
                 artistCards(model.artists)
             }
             .padding(.horizontal, Theme.Layout.contentInset)
@@ -245,17 +237,7 @@ struct SearchView: View {
     private func artistCards(_ items: some Collection<ArtistSummary>) -> some View {
         ForEach(Array(items)) { artist in
             NavigationLink(value: Destination.artist(artist.id)) {
-                VStack(spacing: 10) {
-                    CachedAsyncImage(url: artist.picUrl?.resizedImageURL(256))
-                        .frame(width: 128, height: 128)
-                        .clipShape(Circle())
-                    Text(artist.name)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                }
-                .frame(width: 140)
-                .contentShape(Rectangle())
+                ArtistPortrait(url: artist.picUrl?.resizedImageURL(256), name: artist.name, size: 128)
             }
             .buttonStyle(.interactiveCard)
         }
@@ -285,5 +267,36 @@ struct SearchView: View {
             }
             .buttonStyle(.interactiveCard)
         }
+    }
+}
+
+/// A bare word that darkens when chosen, with a vermilion brush stroke
+/// painting in beneath it.
+private struct SearchTabButton: View {
+    let title: LocalizedStringKey
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13.5, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(Theme.ink.opacity(isSelected ? 1 : (isHovering ? 0.8 : 0.55)))
+                .padding(.vertical, 8)
+                .background(alignment: .bottom) {
+                    PaintedBrush(painted: isSelected, color: Theme.accent.opacity(0.85))
+                        .frame(height: 4)
+                        .padding(.horizontal, -3)
+                        .offset(y: 1)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+        .onHover { isHovering = $0 }
+        .animation(AppAnimation.quick, value: isHovering)
+        .animation(AppAnimation.spring, value: isSelected)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

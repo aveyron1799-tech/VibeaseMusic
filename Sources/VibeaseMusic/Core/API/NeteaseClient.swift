@@ -30,6 +30,7 @@ final class NeteaseClient: @unchecked Sendable {
     private let cookieLock = NSLock()
     private var cookies: [String: String] = [:]
     private let cookieFileURL: URL
+    private let cookieWriter = DispatchQueue(label: "com.vibease.music.cookie-writer")
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -60,9 +61,8 @@ final class NeteaseClient: @unchecked Sendable {
     func setCookies(_ new: [String: String]) {
         cookieLock.lock()
         for (k, v) in new { cookies[k] = v }
-        let snapshot = cookies
+        persist(cookies)
         cookieLock.unlock()
-        persist(snapshot)
     }
 
     /// Ingests a `;;`-joined raw cookie string as returned by the QR login check.
@@ -83,14 +83,22 @@ final class NeteaseClient: @unchecked Sendable {
         cookieLock.lock()
         cookies.removeValue(forKey: "MUSIC_U")
         cookies.removeValue(forKey: "__csrf")
-        let snapshot = cookies
+        persist(cookies)
         cookieLock.unlock()
-        persist(snapshot)
     }
 
+    func flushPendingCookieWrites() {
+        cookieWriter.sync {}
+    }
+
+    /// Must be called while holding `cookieLock`: enqueueing under the lock keeps
+    /// file writes in the same order as the in-memory mutations.
     private func persist(_ snapshot: [String: String]) {
-        if let data = try? JSONEncoder().encode(snapshot) {
-            try? data.write(to: cookieFileURL, options: .atomic)
+        let url = cookieFileURL
+        cookieWriter.async {
+            if let data = try? JSONEncoder().encode(snapshot) {
+                try? data.write(to: url, options: .atomic)
+            }
         }
     }
 

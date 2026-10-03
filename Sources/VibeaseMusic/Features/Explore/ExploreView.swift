@@ -52,22 +52,27 @@ final class ExploreViewModel {
             }
         }
 
+        // A cancelled `.task` (leaving the page mid-load) must not mark the shared
+        // model as exhausted, or the page stays blank on return.
+        func isCurrent() -> Bool {
+            !Task.isCancelled && generation == loadGeneration && category == selectedCategory
+        }
+
         switch category {
         case "排行榜":
-            if let lists = try? await NeteaseAPI.toplists() {
-                guard generation == loadGeneration, category == selectedCategory else { return }
-                toplists = lists
-            }
+            let lists = try? await NeteaseAPI.toplists()
+            guard isCurrent() else { return }
+            if let lists { toplists = lists }
             hasMore = false
         case "推荐歌单":
-            if let result = try? await NeteaseAPI.personalizedPlaylists(limit: 100) {
-                guard generation == loadGeneration, category == selectedCategory else { return }
-                playlists = result
-            }
+            let result = try? await NeteaseAPI.personalizedPlaylists(limit: 100)
+            guard isCurrent() else { return }
+            if let result { playlists = result }
             hasMore = false
         case "精品歌单":
-            if let result = try? await NeteaseAPI.highQualityPlaylists(before: highQualityBefore) {
-                guard generation == loadGeneration, category == selectedCategory else { return }
+            let result = try? await NeteaseAPI.highQualityPlaylists(before: highQualityBefore)
+            guard isCurrent() else { return }
+            if let result {
                 let existing = Set(playlists.map(\.id))
                 playlists += result.playlists.filter { !existing.contains($0.id) }
                 highQualityBefore = result.lasttime ?? 0
@@ -77,10 +82,11 @@ final class ExploreViewModel {
             }
         default:
             let cat = category == "官方" ? "官方" : category
-            if let result = try? await NeteaseAPI.topPlaylists(
+            let result = try? await NeteaseAPI.topPlaylists(
                 category: cat == "全部" ? "全部" : cat, offset: offset
-            ) {
-                guard generation == loadGeneration, category == selectedCategory else { return }
+            )
+            guard isCurrent() else { return }
+            if let result {
                 let existing = Set(playlists.map(\.id))
                 playlists += result.playlists.filter { !existing.contains($0.id) }
                 offset += 50
@@ -112,15 +118,18 @@ struct ExploreView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
+                PageMasthead(title: Text("精选"))
+                    .padding(.horizontal, Theme.Layout.contentInset)
+                    .padding(.top, 14)
+
                 categoryChips
-                    .padding(.top, 8)
 
                 if model.selectedCategory == "排行榜" {
                     ToplistGrid(toplists: model.toplists)
                         .padding(.horizontal, Theme.Layout.contentInset)
                 } else {
-                        CardGrid {
-                            ForEach(model.playlists) { playlist in
+                    CardGrid {
+                        ForEach(model.playlists) { playlist in
                             NavigationCoverCard(
                                 destination: .playlist(playlist.id),
                                 coverURL: playlist.coverURL?.resizedImageURL(384),
@@ -135,9 +144,10 @@ struct ExploreView: View {
                     if model.isLoading {
                         HStack {
                             Spacer()
-                            ProgressView().controlSize(.small)
+                            InkLoader(size: model.playlists.isEmpty ? 34 : 22)
                             Spacer()
                         }
+                        .frame(minHeight: model.playlists.isEmpty ? 260 : 0)
                         .padding(.vertical, 20)
                     } else if model.hasMore {
                         Color.clear
@@ -213,8 +223,8 @@ struct ExploreView: View {
             ZStack(alignment: .leading) {
                 Rectangle().fill(.black.opacity(0.001))
                 Capsule()
-                .fill(.secondary.opacity(0.7))
-                .frame(width: thumbWidth, height: 5)
+                .fill(Theme.ink.opacity(0.3))
+                .frame(width: thumbWidth, height: 3)
                 .offset(x: thumbTravel * fraction)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .opacity(travel > 0 && (isCategoryTrackHovered || isCategoryScrolling) ? 1 : 0)
@@ -260,38 +270,57 @@ struct ToplistGrid: View {
             alignment: .leading, spacing: 20
         ) {
             ForEach(toplists) { toplist in
-                NavigationLink(value: Destination.playlist(toplist.id)) {
-                    HStack(spacing: 14) {
-                        CachedAsyncImage(url: toplist.coverImgUrl?.resizedImageURL(256))
-                            .frame(width: 110, height: 110)
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous))
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(toplist.name)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            Text(toplist.updateFrequency ?? "")
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(.tertiary)
-                            VStack(alignment: .leading, spacing: 3) {
-                                ForEach(Array(toplist.tracks.prefix(3).enumerated()), id: \.offset) { i, preview in
-                                    Text("\(i + 1). \(preview.first) - \(preview.second)")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(10)
-                    .background(.primary.opacity(0.04),
-                                in: RoundedRectangle(cornerRadius: Theme.Radius.large, style: .continuous))
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.interactiveCard)
+                ToplistGridItem(toplist: toplist)
             }
         }
+    }
+}
+
+private struct ToplistGridItem: View {
+    let toplist: ToplistItem
+
+    @State private var isHovering = false
+
+    var body: some View {
+        NavigationLink(value: Destination.playlist(toplist.id)) {
+            HStack(spacing: 16) {
+                CoverArtwork(url: toplist.coverImgUrl?.resizedImageURL(256), size: 104, lifted: isHovering)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(toplist.name)
+                        .font(.serif(15.5, .bold))
+                        .foregroundStyle(Theme.ink)
+                        .lineLimit(1)
+                    Text(toplist.updateFrequency ?? "")
+                        .font(.system(size: 10.5))
+                        .tracking(1)
+                        .foregroundStyle(Theme.ink.opacity(0.45))
+                    Rectangle()
+                        .fill(Theme.hairline)
+                        .frame(height: 0.75)
+                        .padding(.vertical, 2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(toplist.tracks.prefix(3).enumerated()), id: \.offset) { i, preview in
+                            HStack(alignment: .firstTextBaseline, spacing: 7) {
+                                Text(verbatim: "\(i + 1)")
+                                    .font(.serif(12, .bold))
+                                    .foregroundStyle(i == 0 ? Theme.accent : Theme.ink.opacity(0.4))
+                                    .frame(width: 10, alignment: .leading)
+                                Text(verbatim: "\(preview.first) - \(preview.second)")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Theme.ink.opacity(0.6))
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .paperSheet(cornerRadius: Theme.Radius.large, lifted: isHovering)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.interactiveCard)
+        .onHover { isHovering = $0 }
     }
 }
 
@@ -300,8 +329,13 @@ struct ToplistsView: View {
 
     var body: some View {
         ScrollView {
-            ToplistGrid(toplists: toplists)
-                .padding(Theme.Layout.contentInset)
+            VStack(alignment: .leading, spacing: 24) {
+                PageMasthead(title: Text("排行榜"))
+                ToplistGrid(toplists: toplists)
+            }
+            .padding(.horizontal, Theme.Layout.contentInset)
+            .padding(.top, 14)
+            .padding(.bottom, Theme.Layout.contentInset)
         }
         .hoverScrollIndicators()
         .navigationTitle("排行榜")

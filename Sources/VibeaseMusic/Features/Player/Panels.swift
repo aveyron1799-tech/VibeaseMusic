@@ -13,24 +13,18 @@ struct LyricsPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().opacity(0.3)
+            Rectangle().fill(Theme.hairline).frame(height: 0.75).padding(.horizontal, 16)
             content
         }
         .frame(width: 320)
         .frame(maxHeight: .infinity)
-        .compatGlass(interactive: true, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 0.5)
-        )
+        .panelChrome()
     }
 
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("歌词")
-                    .font(.headline)
+                PanelTitle(text: "歌词")
                 if let contributor = player.lyrics?.contributor {
                     Text("贡献者：\(contributor)")
                         .font(.system(size: 10.5))
@@ -38,16 +32,7 @@ struct LyricsPanel: View {
                 }
             }
             Spacer()
-            Button {
-                player.activePanel = nil
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-                    .background(.primary.opacity(0.06), in: Circle())
-            }
-            .buttonStyle(.pressable)
+            PanelCloseButton { player.activePanel = nil }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -81,9 +66,16 @@ struct LyricsPanel: View {
                     activeIndex = nil
                     proxy.scrollTo(0, anchor: .top)
                 }
-                .simultaneousGesture(
-                    DragGesture().onChanged { _ in
+                .onAppear {
+                    activeIndex = lyrics.activeIndex(at: player.progress + 0.2)
+                    if let activeIndex { proxy.scrollTo(activeIndex, anchor: .center) }
+                }
+                .onScrollPhaseChange { _, phase in
+                    // Wheel and trackpad scrolling don't produce drag gestures on macOS.
+                    if phase == .interacting || phase == .decelerating {
                         isUserScrolling = true
+                        resumeTask?.cancel()
+                    } else if phase == .idle, isUserScrolling {
                         resumeTask?.cancel()
                         resumeTask = Task {
                             try? await Task.sleep(for: .seconds(3))
@@ -91,13 +83,13 @@ struct LyricsPanel: View {
                             isUserScrolling = false
                         }
                     }
-                )
+                }
             }
         } else if player.lyrics?.isInstrumental == true {
             EmptyStateView(icon: "music.quarternote.3", title: "纯音乐", subtitle: "请欣赏")
         } else if player.lyrics == nil, player.hasCurrentTrack {
-            VStack(spacing: 10) {
-                ProgressView().controlSize(.small)
+            VStack(spacing: 12) {
+                InkLoader(size: 28, color: Theme.ink.opacity(0.6))
                 Text("歌词加载中…")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
@@ -116,9 +108,9 @@ struct LyricsPanel: View {
             player.seek(to: line.time)
         } label: {
             VStack(alignment: .leading, spacing: 3) {
-                Text(line.text.isEmpty ? "♪" : line.text)
-                    .font(.system(size: isActive ? 16 : 14, weight: isActive ? .bold : .medium))
-                    .foregroundStyle(isActive ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                Text(line.text.isEmpty ? "……" : line.text)
+                    .font(.serif(isActive ? 16.5 : 14, isActive ? .bold : .regular))
+                    .foregroundStyle(Theme.ink.opacity(isActive ? 1 : 0.45))
                 if settings.showLyricsTranslation, let translation = line.translation {
                     Text(translation)
                         .font(.system(size: isActive ? 13 : 12))
@@ -127,9 +119,14 @@ struct LyricsPanel: View {
             }
             .multilineTextAlignment(.leading)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .leading) {
+                Capsule()
+                    .fill(Theme.accent)
+                    .frame(width: 2.5, height: isActive ? 14 : 0)
+                    .offset(x: -11)
+                    .opacity(isActive ? 1 : 0)
+            }
             .contentShape(Rectangle())
-            .opacity(isActive ? 1 : 0.75)
-            .blur(radius: isActive ? 0 : 0.3)
         }
         .buttonStyle(.plain)
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isActive)
@@ -144,7 +141,7 @@ struct QueuePanel: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().opacity(0.3)
+            Rectangle().fill(Theme.hairline).frame(height: 0.75).padding(.horizontal, 16)
             if let current = player.currentTrack {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 2) {
@@ -177,32 +174,17 @@ struct QueuePanel: View {
         }
         .frame(width: 340)
         .frame(maxHeight: .infinity)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
-                .strokeBorder(.primary.opacity(0.06), lineWidth: 0.5)
-        )
+        .panelChrome()
     }
 
     private var header: some View {
         HStack {
-            Text("播放队列")
-                .font(.headline)
+            PanelTitle(text: "播放队列")
             Text("\(player.upcomingTracks.count + (player.hasCurrentTrack ? 1 : 0) + (player.isFMMode ? player.fmPlayedTracks.count : 0)) 首")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
             Spacer()
-            Button {
-                player.activePanel = nil
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-                    .background(.primary.opacity(0.06), in: Circle())
-            }
-            .buttonStyle(.pressable)
+            PanelCloseButton { player.activePanel = nil }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -210,8 +192,9 @@ struct QueuePanel: View {
 
     private func sectionLabel(_ text: LocalizedStringKey) -> some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.tertiary)
+            .font(.serif(11, .medium))
+            .tracking(2)
+            .foregroundStyle(Theme.ink.opacity(0.42))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
     }
@@ -233,11 +216,14 @@ private struct QueueRow: View {
             HStack(spacing: 10) {
                 CachedAsyncImage(url: track.album.picUrl?.resizedImageURL(96), animated: false)
                     .frame(width: 36, height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(Theme.hairline, lineWidth: 0.5))
+                    .saturation(isHistory ? 0.3 : 1)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.name)
                         .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(isCurrent ? Theme.accent : .primary)
+                        .foregroundStyle(isCurrent ? Theme.accent : Theme.ink.opacity(isHistory ? 0.5 : 0.92))
                         .lineLimit(1)
                     Text(track.artistNames)
                         .font(.system(size: 11))
@@ -253,13 +239,13 @@ private struct QueueRow: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Theme.ink.opacity(0.5))
                     }
                     .buttonStyle(.pressable)
                 } else {
                     Text(Formatters.duration(track.duration))
                         .font(.system(size: 10.5).monospacedDigit())
-                        .foregroundStyle(.quaternary)
+                        .foregroundStyle(Theme.ink.opacity(0.38))
                 }
             }
             .padding(.horizontal, 8)
@@ -268,5 +254,49 @@ private struct QueueRow: View {
         }
         .buttonStyle(.interactiveRow)
         .onHover { isHovering = $0 }
+    }
+}
+
+// MARK: - Panel chrome
+
+private struct PanelTitle: View {
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Text(text)
+                .font(.serif(16, .bold))
+                .foregroundStyle(Theme.ink)
+            Circle().fill(Theme.accent).frame(width: 4, height: 4)
+        }
+    }
+}
+
+private struct PanelCloseButton: View {
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Theme.ink.opacity(0.6))
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(isHovering ? Theme.wash : .clear))
+                .rotationEffect(.degrees(isHovering ? 90 : 0))
+        }
+        .buttonStyle(.pressable)
+        .onHover { isHovering = $0 }
+        .animation(AppAnimation.spring, value: isHovering)
+        .help("关闭")
+    }
+}
+
+extension View {
+    /// Side panels are a single tall sheet laid on the page.
+    func panelChrome() -> some View {
+        self
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
+            .compatGlass(interactive: true, in: RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
     }
 }

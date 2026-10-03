@@ -27,6 +27,7 @@ struct MainWindow: View {
         } detail: {
             detailStack
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background { PaperBackground().ignoresSafeArea() }
                 .playerChrome()
         }
         .toolbar {
@@ -61,7 +62,10 @@ struct MainWindow: View {
         // (sidebar toggle, navigation title, search field).
         .toolbar(player.showNowPlaying ? .hidden : .automatic, for: .windowToolbar)
         .toolbarBackground(player.showNowPlaying ? .hidden : .automatic, for: .windowToolbar)
-        .background(WindowAccessor { _ in })
+        .background(WindowAccessor { window in
+            // Let the paper run up under the title bar instead of a grey strip.
+            window.backgroundColor = NSColor(Theme.paper)
+        })
         .overlay(alignment: .topTrailing) {
             if !searchSuggestions.isEmpty && !player.showNowPlaying {
                 searchSuggestionsPanel
@@ -124,13 +128,19 @@ struct MainWindow: View {
                     }
                 }
                 .ignoresSafeArea()
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity.combined(with: .scale(scale: 0.98))
+                ))
             }
         }
         .overlay(alignment: .top) {
             if let toast = toasts.current {
                 ToastView(toast: toast)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .transition(.asymmetric(
+                        insertion: .offset(y: -14).combined(with: .opacity),
+                        removal: .opacity.combined(with: .scale(scale: 0.96))
+                    ))
                     .padding(.top, 12)
             }
         }
@@ -190,15 +200,18 @@ struct MainWindow: View {
     }
 
     private var loginPrompt: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "heart.circle")
-                .font(.system(size: 48))
-                .foregroundStyle(.tertiary)
+        VStack(spacing: 18) {
+            ZStack {
+                Enso(lineWidth: 5, color: Theme.ink.opacity(0.6))
+                    .frame(width: 92, height: 92)
+                SealStamp(text: "心", size: 30)
+                    .rotationEffect(.degrees(-5))
+            }
             Text("登录后查看你喜欢的音乐")
-                .font(.headline)
+                .font(.serif(17, .bold))
+                .foregroundStyle(Theme.ink)
             Button("登录") { showLogin = true }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
+                .buttonStyle(.ink)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -211,8 +224,9 @@ struct MainWindow: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: suggestion.icon)
+                            .font(.system(size: 11))
                             .frame(width: 18)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(index == selectedSuggestion ? Theme.accent : Theme.ink.opacity(0.45))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(suggestion.title).lineLimit(1)
                             Text(suggestion.subtitle)
@@ -224,17 +238,16 @@ struct MainWindow: View {
                     }
                     .padding(.horizontal, 9)
                     .padding(.vertical, 6)
-                    .background(index == selectedSuggestion ? Theme.accent.opacity(0.12) : .clear,
-                                in: RoundedRectangle(cornerRadius: 7))
+                    .background(index == selectedSuggestion ? Theme.wash : .clear,
+                                in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(8)
-        .frame(width: 230)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(0.18), radius: 12, y: 5)
+        .frame(width: 240)
+        .compatGlass(in: RoundedRectangle(cornerRadius: Theme.Radius.large, style: .continuous))
     }
 
     private func selectSearchSuggestion(_ suggestion: SearchSuggestion) {
@@ -340,10 +353,17 @@ struct SearchFieldView: View {
                 .onChange(of: text) { isFocused = true }
                 .onChange(of: isFocused) { if !isFocused { focused = false } }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 11)
         .padding(.vertical, 5)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.primary.opacity(focused ? 0.18 : 0.08), lineWidth: 1))
+        .background(Theme.sheet.opacity(focused ? 1 : 0.6), in: Capsule())
+        .overlay(Capsule().strokeBorder(focused ? Theme.ink.opacity(0.35) : Theme.hairline, lineWidth: 0.75))
+        .overlay(alignment: .bottom) {
+            // A thin vermilion brush line paints under the field while typing.
+            PaintedBrush(painted: focused, color: Theme.accent.opacity(0.7))
+                .frame(height: 2.5)
+                .padding(.horizontal, 16)
+                .offset(y: 1)
+        }
         .animation(AppAnimation.quick, value: focused)
         .padding(.trailing, 16)
         .task {
@@ -364,11 +384,17 @@ struct ToastView: View {
     let toast: Toast
 
     var body: some View {
-        Text(toast.message)
-            .font(.system(size: 12.5, weight: .medium))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 9)
-            .compatGlass(in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+        HStack(spacing: 9) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(Theme.accent)
+                .frame(width: 7, height: 7)
+                .rotationEffect(.degrees(45))
+            Text(toast.message)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(Theme.ink)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+        .compatGlass(in: RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous))
     }
 }

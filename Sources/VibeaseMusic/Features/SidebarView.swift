@@ -13,18 +13,22 @@ struct SidebarView: View {
     var body: some View {
         List {
             Section {
-                row(.home, title: "推荐", icon: "house.fill")
-                row(.explore, title: "精选", icon: "square.grid.2x2.fill")
-                row(.fm, title: "漫游", icon: "wave.3.right.circle.fill")
+                SidebarBrand()
+                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 10, trailing: 6))
+                row(.home, title: "推荐", icon: "house")
+                row(.explore, title: "精选", icon: "square.grid.2x2")
+                row(.fm, title: "漫游", icon: "wind")
             }
 
             if account.hasAuthCookie {
-                Section("我的") {
-                    row(.likedSongs, title: "我喜欢的音乐", icon: "heart.fill")
+                Section {
+                    row(.likedSongs, title: "我喜欢的音乐", icon: "heart")
                     row(.daily, title: "每日推荐", icon: "calendar")
-                    row(.recents, title: "最近播放", icon: "clock.fill")
-                    row(.collections, title: "我的收藏", icon: "star.fill")
-                    row(.cloud, title: "音乐云盘", icon: "icloud.fill")
+                    row(.recents, title: "最近播放", icon: "clock")
+                    row(.collections, title: "我的收藏", icon: "star")
+                    row(.cloud, title: "音乐云盘", icon: "icloud")
+                } header: {
+                    SidebarSectionTitle("我的")
                 }
 
                 if !account.createdPlaylists.isEmpty {
@@ -34,7 +38,7 @@ struct SidebarView: View {
                         }
                     } header: {
                         HStack {
-                            Text("创建的歌单")
+                            SidebarSectionTitle("创建的歌单")
                             Spacer()
                             Button {
                                 showNewPlaylist = true
@@ -54,16 +58,19 @@ struct SidebarView: View {
                 }
 
                 if !account.subscribedPlaylists.isEmpty {
-                    Section("收藏的歌单") {
+                    Section {
                         ForEach(account.subscribedPlaylists) { playlist in
                             playlistRow(playlist)
                         }
+                    } header: {
+                        SidebarSectionTitle("收藏的歌单")
                     }
                 }
             }
         }
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
+        .background { PaperBackground(tone: .sidebar).ignoresSafeArea() }
         .thinAutoScrollIndicators(.vertical)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             accountFooter
@@ -150,7 +157,8 @@ struct SidebarView: View {
     @ViewBuilder
     private var accountFooter: some View {
         VStack(spacing: 0) {
-            Divider().opacity(0.35)
+            Rectangle().fill(Theme.hairline).frame(height: 0.75)
+                .padding(.horizontal, 14)
             if let profile = account.profile {
                 AccountChip(profile: profile, avatarImage: avatarImage)
                     .padding(.horizontal, 10)
@@ -161,10 +169,11 @@ struct SidebarView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "person.crop.circle")
-                            .font(.system(size: 18))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 18, weight: .light))
+                            .foregroundStyle(Theme.ink.opacity(0.6))
                         Text("登录网易云音乐")
                             .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Theme.ink)
                         Spacer()
                     }
                     .contentShape(Rectangle())
@@ -174,7 +183,53 @@ struct SidebarView: View {
                 .padding(.vertical, 10)
             }
         }
-        .background(.ultraThinMaterial)
+        .background(Theme.paperDeep.opacity(0.92))
+    }
+}
+
+// MARK: - Brand
+
+/// Wordmark: a tiny ensō with a vermilion seal tucked against it.
+private struct SidebarBrand: View {
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 9) {
+            ZStack {
+                Enso(progress: isHovering ? 1 : 0.86, lineWidth: 2.6, color: Theme.ink)
+                    .frame(width: 24, height: 24)
+                    .rotationEffect(.degrees(isHovering ? 40 : 0))
+                Circle().fill(Theme.accent).frame(width: 4, height: 4)
+            }
+            .animation(.easeInOut(duration: 0.9), value: isHovering)
+            Text("Vibease")
+                .font(.serif(17, .bold))
+                .foregroundStyle(Theme.ink)
+            SealStamp(text: "乐", size: 15)
+                .rotationEffect(.degrees(-6))
+                .offset(y: -1)
+            Spacer(minLength: 0)
+        }
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 6)
+        .padding(.top, 2)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Vibease Music")
+    }
+}
+
+private struct SidebarSectionTitle: View {
+    let title: LocalizedStringKey
+    init(_ title: LocalizedStringKey) { self.title = title }
+
+    var body: some View {
+        Text(title)
+            .font(.serif(11, .medium))
+            .tracking(2)
+            .foregroundStyle(Theme.ink.opacity(0.42))
     }
 }
 
@@ -202,7 +257,7 @@ private struct AccountChip: View {
                     if profile.vipType > 0 {
                         Text("黑胶 VIP")
                             .font(.system(size: 9.5, weight: .medium))
-                            .foregroundStyle(Theme.accent)
+                            .foregroundStyle(Theme.gold)
                     }
                 }
                 Spacer(minLength: 0)
@@ -214,7 +269,7 @@ private struct AccountChip: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
-                    .fill(isHovering ? Color.primary.opacity(0.06) : .clear)
+                    .fill(isHovering ? Theme.wash : .clear)
             )
             .contentShape(Rectangle())
         }
@@ -235,6 +290,7 @@ private struct AccountChip: View {
                 .scaledToFill()
                 .frame(width: diameter, height: diameter)
                 .clipShape(Circle())
+                .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 0.75))
         } else {
             Image(systemName: "person.crop.circle.fill")
                 .font(.system(size: diameter - 2))
@@ -246,11 +302,15 @@ private struct AccountChip: View {
     private var accountCard: some View {
         VStack(spacing: 12) {
             avatar(diameter: 56)
-                .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+                .overlay {
+                    Enso(lineWidth: 2.5, color: Theme.ink.opacity(0.7))
+                        .frame(width: 74, height: 74)
+                }
+                .padding(.top, 6)
             VStack(spacing: 3) {
                 HStack(spacing: 6) {
                     Text(profile.nickname)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.serif(15, .bold))
                     if profile.vipType > 0 {
                         VIPBadge()
                     }
@@ -263,20 +323,15 @@ private struct AccountChip: View {
                         .multilineTextAlignment(.center)
                 }
             }
-            Divider().opacity(0.4)
+            Rectangle().fill(Theme.hairline).frame(height: 0.75)
             Button {
                 showPopover = false
                 Task { await account.logout() }
             } label: {
                 Text("退出登录")
-                    .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Theme.accent)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 7)
-                    .background(Theme.accent.opacity(0.1), in: Capsule())
-                    .contentShape(Capsule())
             }
-            .buttonStyle(.pressable)
+            .buttonStyle(.inkOutline)
         }
         .padding(16)
         .frame(width: 220)
@@ -285,6 +340,30 @@ private struct AccountChip: View {
 
 // MARK: - Rows
 
+/// Selection is a pale ink brush mark swept in behind the row, with a single
+/// vermilion dot where the brush landed.
+private struct SidebarSelection: View {
+    let isSelected: Bool
+    let isHovering: Bool
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
+                .fill(isHovering && !isSelected ? Theme.wash : .clear)
+            PaintedBrush(painted: isSelected, color: Theme.ink.opacity(0.085))
+                .padding(.vertical, 1)
+            Circle()
+                .fill(Theme.accent)
+                .frame(width: 4, height: 4)
+                .offset(x: -1)
+                .scaleEffect(isSelected ? 1 : 0.01)
+                .opacity(isSelected ? 1 : 0)
+                .animation(AppAnimation.bouncy.delay(isSelected ? 0.18 : 0), value: isSelected)
+        }
+        .animation(AppAnimation.quick, value: isHovering)
+    }
+}
+
 private struct SidebarRow: View {
     let title: LocalizedStringKey
     let icon: String
@@ -292,33 +371,31 @@ private struct SidebarRow: View {
     let action: () -> Void
     let onDoubleClick: (() -> Void)?
 
+    @State private var isHovering = false
+
     var body: some View {
         Button(action: action) {
-            Label {
-                Text(title)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-            } icon: {
+            HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .foregroundStyle(Color(red: 0.78, green: 0.38, blue: 0.40))
+                    .font(.system(size: 13, weight: isSelected ? .medium : .light))
+                    .foregroundStyle(isSelected ? Theme.ink : Theme.ink.opacity(0.62))
+                    .frame(width: 18)
+                    .symbolEffect(.bounce, value: isSelected)
+                Text(title)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? Theme.ink : Theme.ink.opacity(0.8))
+                    .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(selectionBackground)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(SidebarSelection(isSelected: isSelected, isHovering: isHovering))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
         .simultaneousGesture(TapGesture(count: 2).onEnded { onDoubleClick?() })
         .listRowInsets(EdgeInsets(top: 1, leading: 0, bottom: 1, trailing: 6))
-    }
-
-    @ViewBuilder
-    private var selectionBackground: some View {
-        if isSelected {
-            RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
-                .fill(Color.secondary.opacity(0.22))
-        }
     }
 }
 
@@ -327,33 +404,32 @@ private struct SidebarPlaylistRow: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @State private var isHovering = false
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 9) {
                 CachedAsyncImage(url: playlist.coverURL?.resizedImageURL(64), animated: false)
                     .frame(width: 22, height: 22)
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .strokeBorder(Theme.hairline, lineWidth: 0.5))
+                    .saturation(isSelected || isHovering ? 1 : 0.75)
                 Text(playlist.name)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? Theme.ink : Theme.ink.opacity(0.78))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(selectionBackground)
+            .background(SidebarSelection(isSelected: isSelected, isHovering: isHovering))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(AppAnimation.quick, value: isHovering)
         .listRowInsets(EdgeInsets(top: 1, leading: 0, bottom: 1, trailing: 6))
-    }
-
-    @ViewBuilder
-    private var selectionBackground: some View {
-        if isSelected {
-            RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
-                .fill(Color.secondary.opacity(0.22))
-        }
     }
 }

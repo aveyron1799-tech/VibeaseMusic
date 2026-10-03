@@ -37,15 +37,17 @@ struct TrackRow: View {
 
             if style != .albumTrack {
                 CachedAsyncImage(url: track.album.picUrl?.resizedImageURL(96), animated: false)
-                    .frame(width: 42, height: 42)
+                    .frame(width: 40, height: 40)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: Theme.Radius.small, style: .continuous)
+                        .strokeBorder(Theme.hairline, lineWidth: 0.5))
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(track.name)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(isCurrent ? Theme.accent : .primary)
+                        .font(.system(size: 13, weight: isCurrent ? .semibold : .medium))
+                        .foregroundStyle(isCurrent ? Theme.accent : Theme.ink.opacity(0.92))
                         .lineLimit(1)
                     if let subtitle = track.subtitle {
                         Text("(\(subtitle))")
@@ -59,7 +61,7 @@ struct TrackRow: View {
                 }
                 Text(track.artistNames)
                     .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.ink.opacity(0.52))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,7 +70,7 @@ struct TrackRow: View {
                 NavigationLink(value: Destination.album(track.album.id)) {
                     Text(track.album.name)
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.ink.opacity(0.5))
                         .lineLimit(1)
                 }
                 .buttonStyle(.plain)
@@ -81,7 +83,7 @@ struct TrackRow: View {
                     .foregroundStyle(.tertiary)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 4))
+                    .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(Theme.hairline, lineWidth: 0.75))
             }
 
             if let trailingText {
@@ -99,8 +101,15 @@ struct TrackRow: View {
         .frame(height: style == .albumTrack ? 46 : 52)
         .opacity(isPlayable ? 1 : 0.45)
         .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
-                .fill(isHovering ? Color.primary.opacity(0.06) : .clear)
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
+                    .fill(isHovering ? Theme.wash : (isCurrent ? Theme.accent.opacity(0.05) : .clear))
+                Capsule()
+                    .fill(Theme.accent)
+                    .frame(width: 2.5, height: isCurrent ? 18 : 0)
+                    .opacity(isCurrent ? 1 : 0)
+                    .animation(AppAnimation.spring, value: isCurrent)
+            }
         )
         .contentShape(Rectangle())
         .onHover { hovering in
@@ -123,14 +132,17 @@ struct TrackRow: View {
             } else if isHovering, isPlayable {
                 Button(action: onPlay) {
                     Image(systemName: "play.fill")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.primary)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.pressable)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
             } else {
-                Text(String(index))
-                    .font(.system(size: 12).monospacedDigit())
-                    .foregroundStyle(.tertiary)
+                Text(String(format: "%02d", index))
+                    .font(.serif(13).monospacedDigit())
+                    .foregroundStyle(Theme.ink.opacity(0.38))
             }
         }
         .frame(width: 28)
@@ -139,19 +151,12 @@ struct TrackRow: View {
     private var likeAndDuration: some View {
         HStack(spacing: 8) {
             let liked = account.isLiked(track.id)
-            Button {
-                Task { await account.toggleLike(trackID: track.id) }
-            } label: {
-                Image(systemName: liked ? "heart.fill" : "heart")
-                    .font(.system(size: 12))
-                    .foregroundStyle(liked ? AnyShapeStyle(Theme.accent) : AnyShapeStyle(.secondary))
-            }
-            .buttonStyle(.pressable)
-            .opacity(liked || isHovering ? 1 : 0)
+            LikeButton(trackID: track.id, size: 12, restingColor: Theme.ink.opacity(0.5), diameter: 24)
+                .opacity(liked || isHovering ? 1 : 0)
 
             Text(Formatters.duration(track.duration))
                 .font(.system(size: 11.5).monospacedDigit())
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Theme.ink.opacity(0.4))
                 .frame(width: 36, alignment: .trailing)
         }
     }
@@ -213,13 +218,14 @@ struct PlayingIndicator: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 20, paused: !animating)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 2) {
-                ForEach(0..<4, id: \.self) { i in
-                    let phase = t * 2.4 + Double(i) * 0.9
-                    let height: CGFloat = animating ? 4 + 8 * abs(sin(phase)) : 4
-                    RoundedRectangle(cornerRadius: 1)
+            // Three reeds swaying at their own pace.
+            HStack(spacing: 2.5) {
+                ForEach(0..<3, id: \.self) { i in
+                    let phase = t * (1.6 + Double(i) * 0.45) + Double(i) * 1.3
+                    let height: CGFloat = animating ? 4 + 9 * (0.5 + 0.5 * sin(phase)) : 3
+                    Capsule()
                         .fill(Theme.accent)
-                        .frame(width: 2.5, height: height)
+                        .frame(width: 2, height: height)
                 }
             }
             .frame(height: 14, alignment: .center)
@@ -284,10 +290,14 @@ struct AddToPlaylistSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("收藏到歌单")
-                .font(.headline)
-                .padding(16)
-            Divider().opacity(0.4)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text("收藏到歌单")
+                    .font(.serif(16, .bold))
+                    .foregroundStyle(Theme.ink)
+                Circle().fill(Theme.accent).frame(width: 4, height: 4)
+            }
+            .padding(16)
+            Rectangle().fill(Theme.hairline).frame(height: 0.75)
             if account.createdPlaylists.isEmpty {
                 EmptyStateView(icon: "music.note.list", title: "还没有创建歌单")
                     .frame(height: 200)
@@ -301,7 +311,7 @@ struct AddToPlaylistSheet: View {
                                 HStack(spacing: 10) {
                                     CachedAsyncImage(url: playlist.coverURL?.resizedImageURL(80), animated: false)
                                         .frame(width: 36, height: 36)
-                                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(playlist.name)
                                             .font(.system(size: 13, weight: .medium))
@@ -325,18 +335,20 @@ struct AddToPlaylistSheet: View {
                 .hoverScrollIndicators()
                 .frame(height: 280)
             }
-            Divider().opacity(0.4)
+            Rectangle().fill(Theme.hairline).frame(height: 0.75)
             HStack {
                 TextField("新建歌单", text: $newName)
                     .textFieldStyle(.roundedBorder)
                 Button("创建并收藏") {
                     createAndAdd()
                 }
+                .buttonStyle(.ink)
                 .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty || creating)
             }
             .padding(12)
         }
         .frame(width: 340)
+        .background { PaperBackground() }
     }
 
     private func add(to playlist: PlaylistSummary) {

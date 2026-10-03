@@ -103,6 +103,7 @@ final class PlayerService {
     private var resolveGeneration = 0
     private var failureHandledGeneration: Int?
     private var consecutiveFailures = 0
+    private var currentIsPlayNext = false
     private var scrobbled = false
     private var resolveTask: Task<Void, Never>?
     private var lyricsTask: Task<Void, Never>?
@@ -174,6 +175,17 @@ final class PlayerService {
 
     /// Insert a track right after the current one.
     func addToPlayNext(_ track: Track, playNow: Bool = false) {
+        // FM advancing never consults playNextList, so queue it as the next recommendation.
+        if isFMMode {
+            fmUpcoming.removeAll { $0.id == track.id }
+            fmUpcoming.insert(track, at: 0)
+            if playNow || currentTrack == nil {
+                jumpTo(track)
+            } else {
+                ToastCenter.shared.show(String(localized: "已添加到下一首播放"))
+            }
+            return
+        }
         playNextList.append(track)
         persistState()
         if playNow || currentTrack == nil {
@@ -195,9 +207,11 @@ final class PlayerService {
             isPlaying = false
         } else if engine.currentItem == nil {
             // Restored session: re-resolve the source.
-            startPlaying(track, indexUnchanged: true)
+            startPlaying(track, indexUnchanged: true, fromPlayNext: currentIsPlayNext)
             return
         } else {
+            // AVPlayer does not restart an item that is parked at its end.
+            if duration > 0, progress >= duration - 0.5 { seek(to: 0) }
             engine.play()
             isPlaying = true
         }
@@ -218,6 +232,11 @@ final class PlayerService {
         if isFMMode { return }
         if progress > 4 || activeQueue.isEmpty {
             seek(to: 0)
+            return
+        }
+        // A play-next track leaves currentIndex on the queue item that preceded it.
+        if currentIsPlayNext, activeQueue.indices.contains(currentIndex) {
+            startPlaying(activeQueue[currentIndex])
             return
         }
         var idx = currentIndex - 1
@@ -241,14 +260,21 @@ final class PlayerService {
 
     func toggleShuffle() {
         guard !isFMMode else { return }
+        // Anchor on the queue position, not a play-next track that isn't in the queue.
+        let anchor: Track? = currentIsPlayNext
+            ? (activeQueue.indices.contains(currentIndex) ? activeQueue[currentIndex] : nil)
+            : currentTrack
         shuffleEnabled.toggle()
         defer { persistState() }
-        guard let current = currentTrack else { return }
+        guard let anchor else {
+            if shuffleEnabled { shuffledQueue = queue.shuffled() }
+            return
+        }
         if shuffleEnabled {
-            reshuffle(keeping: current)
+            reshuffle(keeping: anchor)
             currentIndex = 0
         } else {
-            currentIndex = queue.firstIndex(where: { $0.id == current.id }) ?? 0
+            currentIndex = queue.firstIndex(where: { $0.id == anchor.id }) ?? 0
         }
     }
 
@@ -277,7 +303,7 @@ final class PlayerService {
         }
         if let nextIdx = playNextList.firstIndex(where: { $0.id == track.id }) {
             playNextList.removeSubrange(0...nextIdx)
-            startPlaying(track, indexUnchanged: true)
+            startPlaying(track, indexUnchanged: true, fromPlayNext: true)
             return
         }
         if let idx = activeQueue.firstIndex(where: { $0.id == track.id }) {
@@ -347,8 +373,8 @@ final class PlayerService {
         lyricsTask?.cancel()
         removeCurrentItemObservers()
         engine.replaceCurrentItem(with: nil)
-        shuffleEnabled = false
-        repeatMode = .off
+        // Shuffle and repeat are left alone: FM bypasses both, and resetting them
+        // would overwrite the user's saved preferences.
         queue = []
         shuffledQueue = []
         playNextList = []
@@ -430,7 +456,7 @@ final class PlayerService {
         }
         if !playNextList.isEmpty {
             let track = playNextList.removeFirst()
-            startPlaying(track, indexUnchanged: true)
+            startPlaying(track, indexUnchanged: true, fromPlayNext: true)
             return
         }
         guard !activeQueue.isEmpty else { return }
@@ -465,8 +491,12 @@ final class PlayerService {
 
     // MARK: - Source resolution
 
-    private func startPlaying(_ track: Track, indexUnchanged: Bool = false, autoplay: Bool = true) {
+    private func startPlaying(_ track: Track, indexUnchanged: Bool = false, autoplay: Bool = true,
+                              fromPlayNext: Bool = false) {
         scrobbleIfNeeded(completed: false)
+        currentIsPlayNext = fromPlayNext
+        // A scrubber removed mid-drag never reports its end; don't freeze progress forever.
+        isScrubbing = false
         resolveTask?.cancel()
         lyricsTask?.cancel()
         removeCurrentItemObservers()

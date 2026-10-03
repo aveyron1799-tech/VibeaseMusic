@@ -1,5 +1,51 @@
 import SwiftUI
 
+// MARK: - Page masthead
+
+/// Serif page title closed with a vermilion dot, an optional tracked caption
+/// beneath, and trailing actions aligned to the title's baseline.
+struct PageMasthead<Trailing: View>: View {
+    let title: Text
+    var caption: Text?
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    title
+                        .font(.serif(29, .bold))
+                        .foregroundStyle(Theme.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Circle()
+                        .fill(Theme.accent)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                if let caption {
+                    caption
+                        .font(.system(size: 11.5, weight: .medium))
+                        .tracking(2)
+                        .foregroundStyle(Theme.ink.opacity(0.5))
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 12)
+            trailing()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension PageMasthead where Trailing == EmptyView {
+    init(title: Text, caption: Text? = nil) {
+        self.init(title: title, caption: caption) { EmptyView() }
+    }
+}
+
 // MARK: - 最近播放
 
 struct RecentsView: View {
@@ -12,36 +58,32 @@ struct RecentsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Picker("", selection: $week) {
-                        Text("所有时间").tag(false)
-                        Text("最近一周").tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(width: 200)
-
-                    Spacer()
-
+            VStack(alignment: .leading, spacing: 18) {
+                PageMasthead(title: Text("最近播放")) {
                     Button {
                         player.play(tracks: records.map(\.song), source: .none)
                     } label: {
                         Label("播放全部", systemImage: "play.fill")
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(Theme.accentGradient, in: Capsule())
                     }
-                    .buttonStyle(.pressable)
+                    .buttonStyle(.ink)
                     .disabled(records.isEmpty)
+                    .opacity(records.isEmpty ? 0.45 : 1)
                 }
                 .padding(.horizontal, Theme.Layout.contentInset)
-                .padding(.top, 12)
+                .padding(.top, 14)
+
+                HStack(spacing: 8) {
+                    Button("所有时间") { week = false }
+                        .buttonStyle(.chip(isSelected: !week))
+                        .accessibilityAddTraits(!week ? .isSelected : [])
+                    Button("最近一周") { week = true }
+                        .buttonStyle(.chip(isSelected: week))
+                        .accessibilityAddTraits(week ? .isSelected : [])
+                }
+                .padding(.horizontal, Theme.Layout.contentInset)
 
                 if isLoading {
-                    ProgressView()
+                    InkLoader()
                         .frame(maxWidth: .infinity, minHeight: 300)
                 } else if records.isEmpty {
                     EmptyStateView(icon: "clock", title: "暂无播放记录")
@@ -103,32 +145,22 @@ struct CloudView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    if let sizeInfo {
-                        Text(sizeInfo)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
+            VStack(alignment: .leading, spacing: 18) {
+                PageMasthead(title: Text("音乐云盘"), caption: sizeInfo.map { Text(verbatim: $0) }) {
                     Button {
                         player.play(tracks: tracks, source: .cloud)
                     } label: {
                         Label("播放全部", systemImage: "play.fill")
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(Theme.accentGradient, in: Capsule())
                     }
-                    .buttonStyle(.pressable)
+                    .buttonStyle(.ink)
                     .disabled(items.isEmpty)
+                    .opacity(items.isEmpty ? 0.45 : 1)
                 }
                 .padding(.horizontal, Theme.Layout.contentInset)
-                .padding(.top, 12)
+                .padding(.top, 14)
 
                 if isLoading {
-                    ProgressView()
+                    InkLoader()
                         .frame(maxWidth: .infinity, minHeight: 300)
                 } else if items.isEmpty {
                     EmptyStateView(icon: "icloud", title: "云盘还没有歌曲",

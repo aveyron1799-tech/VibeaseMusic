@@ -11,6 +11,8 @@ final class PlaylistDetailViewModel {
     var isLoadingMore = false
     var errorMessage: String?
     var filter = ""
+    /// Bumped on each load so an older in-flight load can't append duplicates.
+    private var loadGeneration = 0
 
     init(playlistID: Int) {
         self.playlistID = playlistID
@@ -27,29 +29,34 @@ final class PlaylistDetailViewModel {
     }
 
     func load() async {
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = tracks.isEmpty
         errorMessage = nil
         do {
             let response = try await NeteaseAPI.playlistDetail(id: playlistID)
+            guard generation == loadGeneration else { return }
             detail = response.playlist
             tracks = response.playlist.tracks
             merge(privileges: response.privileges)
             isLoading = false
-            await loadRemainingTracks()
+            await loadRemainingTracks(generation: generation)
         } catch {
+            guard generation == loadGeneration else { return }
             isLoading = false
             if tracks.isEmpty { errorMessage = error.localizedDescription }
         }
     }
 
-    private func loadRemainingTracks() async {
+    private func loadRemainingTracks(generation: Int) async {
         guard let detail, tracks.count < detail.trackIds.count else { return }
         isLoadingMore = true
-        defer { isLoadingMore = false }
+        defer { if generation == loadGeneration { isLoadingMore = false } }
         let remaining = detail.trackIds.map(\.id).dropFirst(tracks.count)
         for chunk in stride(from: 0, to: remaining.count, by: 500)
             .map({ Array(remaining.dropFirst($0).prefix(500)) }) {
-            guard let response = try? await NeteaseAPI.songDetails(ids: chunk) else { break }
+            guard let response = try? await NeteaseAPI.songDetails(ids: chunk),
+                  generation == loadGeneration else { break }
             tracks += response.songs
             merge(privileges: response.privileges)
         }
@@ -87,11 +94,11 @@ struct PlaylistDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 26) {
                 if let detail = model.detail {
                     header(detail)
                         .padding(.horizontal, Theme.Layout.contentInset)
-                        .padding(.top, 16)
+                        .padding(.top, 22)
 
                     TrackListView(
                         tracks: model.filteredTracks,
@@ -105,7 +112,7 @@ struct PlaylistDetailView: View {
                     if model.isLoadingMore {
                         HStack {
                             Spacer()
-                            ProgressView().controlSize(.small)
+                            InkLoader(size: 24, color: Theme.ink.opacity(0.5))
                             Spacer()
                         }
                         .padding(.vertical, 12)
@@ -121,6 +128,10 @@ struct PlaylistDetailView: View {
                 Color.clear.frame(height: 8)
             }
         }
+        .background(alignment: .top) {
+            ArtworkWash(url: model.detail?.coverImgUrl?.resizedImageURL(128))
+                .ignoresSafeArea()
+        }
         .hoverScrollIndicators()
         .navigationTitle(model.detail?.name ?? String(localized: "歌单"))
         .task(id: playlistID) {
@@ -131,19 +142,15 @@ struct PlaylistDetailView: View {
     // MARK: - Header
 
     private func header(_ detail: PlaylistDetail) -> some View {
-        HStack(alignment: .bottom, spacing: 24) {
-            CachedAsyncImage(url: detail.coverImgUrl?.resizedImageURL(512))
-                .frame(width: 200, height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.large, style: .continuous))
-                .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
+        HStack(alignment: .bottom, spacing: 28) {
+            CoverArtwork(url: detail.coverImgUrl?.resizedImageURL(512), size: 200, lifted: true)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(isLikedList ? String(localized: "我喜欢的音乐") : String(localized: "歌单"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
+            VStack(alignment: .leading, spacing: 9) {
+                Eyebrow(text: isLikedList ? String(localized: "我喜欢的音乐") : String(localized: "歌单 · PLAYLIST"))
                 Text(detail.name)
-                    .font(.title.weight(.bold))
+                    .font(.serif(29, .bold))
+                    .foregroundStyle(Theme.ink)
+                    .lineSpacing(3)
                     .lineLimit(2)
 
                 if let creator = detail.creator {
@@ -151,15 +158,16 @@ struct PlaylistDetailView: View {
                         CachedAsyncImage(url: creator.avatarUrl?.resizedImageURL(48), animated: false)
                             .frame(width: 18, height: 18)
                             .clipShape(Circle())
+                            .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 0.5))
                         Text(creator.nickname)
                             .font(.system(size: 12.5, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.ink.opacity(0.7))
                     }
                 }
 
                 Text("\(detail.trackCount) 首 · \(Formatters.playCount(detail.playCount)) 次播放 · 更新于 \(Formatters.date(fromMS: detail.updateTime))")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 11.5).monospacedDigit())
+                    .foregroundStyle(Theme.ink.opacity(0.42))
 
                 if let description = detail.description, !description.isEmpty {
                     Button {
@@ -167,7 +175,8 @@ struct PlaylistDetailView: View {
                     } label: {
                         Text(description.replacingOccurrences(of: "\n", with: " "))
                             .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Theme.ink.opacity(0.55))
+                            .lineSpacing(2)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
                     }
@@ -176,7 +185,9 @@ struct PlaylistDetailView: View {
                         ScrollView {
                             Text(description)
                                 .font(.system(size: 13))
-                                .padding(16)
+                                .lineSpacing(4)
+                                .foregroundStyle(Theme.ink)
+                                .padding(18)
                                 .frame(width: 380, alignment: .leading)
                         }
                         .frame(maxHeight: 400)
@@ -198,54 +209,30 @@ struct PlaylistDetailView: View {
                 player.play(tracks: playable, source: .playlist(playlistID))
             } label: {
                 Label("播放全部", systemImage: "play.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 8)
-                    .background(Theme.accentGradient, in: Capsule())
-                    .shadow(color: Theme.accent.opacity(0.3), radius: 6, y: 2)
             }
-            .buttonStyle(.pressable)
+            .buttonStyle(.ink)
 
             if isLikedList {
                 Button {
                     startHeartbeat()
                 } label: {
-                    Label("心动模式", systemImage: "heart.circle")
-                        .font(.system(size: 13, weight: .medium))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.primary.opacity(0.06), in: Capsule())
+                    Label("心动模式", systemImage: "heart")
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.inkOutline)
             } else if !isOwnPlaylist, account.isLoggedIn {
                 Button {
                     toggleSubscribe(detail)
                 } label: {
                     Label(detail.subscribed ? String(localized: "已收藏") : String(localized: "收藏"),
                           systemImage: detail.subscribed ? "checkmark" : "plus")
-                        .font(.system(size: 13, weight: .medium))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(.primary.opacity(0.06), in: Capsule())
+                        .contentTransition(.symbolEffect(.replace))
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.inkOutline)
             }
 
             Spacer()
 
-            HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                TextField("搜索歌单内歌曲", text: Bindable(model).filter)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    .frame(width: 130)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.primary.opacity(0.05), in: Capsule())
+            InkFilterField(placeholder: "搜索歌单内歌曲", text: Bindable(model).filter)
         }
     }
 

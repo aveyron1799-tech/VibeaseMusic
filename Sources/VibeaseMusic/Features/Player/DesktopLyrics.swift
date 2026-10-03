@@ -119,6 +119,11 @@ private struct DesktopLyricsBox: View {
     @Environment(PlayerService.self) private var player
     @Environment(SettingsManager.self) private var settings
 
+    // Fixed tones: the box floats over arbitrary desktops, so it must not
+    // follow the app's light/dark paper.
+    private static let paperWhite = Color(red: 0.99, green: 0.97, blue: 0.93)
+    private static let sumi = Color(red: 0.08, green: 0.075, blue: 0.065)
+
     private var currentLine: LyricLine? {
         guard player.isPlaying || player.progress > 0,
               let lyrics = player.lyrics, !lyrics.isEmpty,
@@ -133,30 +138,38 @@ private struct DesktopLyricsBox: View {
                 // capsule width eases to the new line's size.
                 VStack(spacing: 5) {
                     Text(line.text)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                        .font(.serif(27, .bold))
+                        .tracking(1)
+                        .foregroundStyle(Self.paperWhite)
+                        .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
                         .contentTransition(.opacity)
                     if settings.showLyricsTranslation, let translation = line.translation {
                         Text(translation)
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.78))
-                            .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
+                            .font(.serif(16, .semibold))
+                            .foregroundStyle(Self.paperWhite.opacity(0.8))
+                            .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
                             .contentTransition(.opacity)
                     }
                 }
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
-                .padding(.horizontal, 26)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 11)
                 .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(.black.opacity(0.42))
+                    RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
+                        .fill(Self.sumi.opacity(0.5))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous)
+                                .strokeBorder(Self.paperWhite.opacity(0.12), lineWidth: 0.75)
                         )
                 )
+                .overlay(alignment: .topLeading) {
+                    Circle()
+                        .fill(Theme.accent)
+                        .frame(width: 4, height: 4)
+                        .padding(9)
+                        .accessibilityHidden(true)
+                }
                 .transition(.opacity)
             }
         }

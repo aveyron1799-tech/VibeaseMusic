@@ -2,23 +2,24 @@ import SwiftUI
 
 // MARK: - Skeletons
 
+/// Placeholder: a pale ink wash drifting across the paper.
 struct SkeletonView: View {
     var cornerRadius: CGFloat = Theme.Radius.standard
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { context in
             let phase = context.date.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: 1.5) / 1.5
+                .truncatingRemainder(dividingBy: 2.2) / 2.2
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.quaternary.opacity(0.5))
+                .fill(Theme.wash)
                 .overlay(
                     GeometryReader { geo in
                         LinearGradient(
-                            colors: [.clear, .primary.opacity(0.08), .clear],
+                            colors: [.clear, Theme.ink.opacity(0.05), .clear],
                             startPoint: .leading, endPoint: .trailing
                         )
-                        .frame(width: geo.size.width * 0.6)
-                        .offset(x: (geo.size.width * 1.6) * phase - geo.size.width * 0.6)
+                        .frame(width: geo.size.width * 0.7)
+                        .offset(x: (geo.size.width * 1.7) * phase - geo.size.width * 0.7)
                     }
                 )
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -30,19 +31,19 @@ struct SkeletonCardView: View {
     var size: CGFloat = Theme.Layout.cardSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             SkeletonView().frame(width: size, height: size)
-            SkeletonView(cornerRadius: 4).frame(width: size * 0.8, height: 12)
-            SkeletonView(cornerRadius: 4).frame(width: size * 0.5, height: 10)
+            SkeletonView(cornerRadius: 3).frame(width: size * 0.8, height: 11)
+            SkeletonView(cornerRadius: 3).frame(width: size * 0.5, height: 9)
         }
     }
 }
 
 struct SkeletonShelf: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SkeletonView(cornerRadius: 4).frame(width: 120, height: 20)
-            HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
+            SkeletonView(cornerRadius: 3).frame(width: 110, height: 18)
+            HStack(spacing: 22) {
                 ForEach(0..<6, id: \.self) { _ in
                     SkeletonCardView()
                 }
@@ -73,14 +74,15 @@ struct StaggeredAppearanceModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : 16)
+            .offset(y: isVisible ? 0 : 10)
+            .blur(radius: isVisible ? 0 : 3)
             .onAppear {
                 if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
                     || AnimationCache.hasAnimated(itemID) {
                     isVisible = true
                     return
                 }
-                withAnimation(AppAnimation.snappy.delay(AppAnimation.stagger(for: index))) {
+                withAnimation(.easeOut(duration: 0.55).delay(AppAnimation.stagger(for: index))) {
                     isVisible = true
                 }
                 AnimationCache.markAnimated(itemID)
@@ -96,6 +98,8 @@ extension View {
 
 // MARK: - Section header
 
+/// Serif title closed by a small vermilion full stop. Linked headers paint a
+/// brush underline on hover.
 struct SectionHeader: View {
     let title: LocalizedStringKey
     var subtitle: String?
@@ -105,46 +109,58 @@ struct SectionHeader: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             if let destination {
                 NavigationLink(value: destination) {
-                    headerTitleContent
+                    headerTitleContent(linked: true)
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(AppAnimation.quick) { isHovering = hovering }
-                }
+                .onHover { isHovering = $0 }
             } else if let action {
                 Button(action: action) {
-                    headerTitleContent
+                    headerTitleContent(linked: true)
                 }
                 .buttonStyle(.plain)
-                .onHover { hovering in
-                    withAnimation(AppAnimation.quick) { isHovering = hovering }
-                }
+                .onHover { isHovering = $0 }
             } else {
-                Text(title)
-                    .font(.title2.weight(.semibold))
+                headerTitleContent(linked: false)
             }
             if let subtitle {
                 Text(subtitle)
-                    .font(.subheadline)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
             Spacer()
         }
     }
 
-    private var headerTitleContent: some View {
-        HStack(spacing: 4) {
+    private func headerTitleContent(linked: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
             Text(title)
-                .font(.title2.weight(.semibold))
-                .foregroundStyle(.primary)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.tertiary)
-                .offset(x: isHovering ? 2 : 0)
+                .font(.serif(21, .bold))
+                .foregroundStyle(Theme.ink)
+            Circle()
+                .fill(Theme.accent)
+                .frame(width: 5, height: 5)
+                .offset(y: -1)
+                .scaleEffect(isHovering ? 1.35 : 1)
+            if linked {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.ink.opacity(0.5))
+                    .padding(.leading, 6)
+                    .opacity(isHovering ? 1 : 0)
+                    .offset(x: isHovering ? 0 : -6)
+            }
         }
+        .background(alignment: .bottomLeading) {
+            if linked {
+                PaintedBrush(painted: isHovering, color: Theme.accent.opacity(0.22))
+                    .frame(height: 7)
+                    .offset(y: 2)
+            }
+        }
+        .animation(AppAnimation.spring, value: isHovering)
     }
 }
 
@@ -156,28 +172,29 @@ struct PlayCountBadge: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: "play.fill")
-                .font(.system(size: 8, weight: .bold))
+                .font(.system(size: 7, weight: .bold))
             Text(Formatters.playCount(count))
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: 10, weight: .medium).monospacedDigit())
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3.5)
-        .background(.black.opacity(0.35), in: Capsule())
-        .background(.ultraThinMaterial.opacity(0.6), in: Capsule())
+        .foregroundStyle(Color(red: 0.98, green: 0.96, blue: 0.92))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(Color(red: 0.1, green: 0.09, blue: 0.08).opacity(0.42), in: Capsule())
     }
 }
 
+/// VIP: gold leaf outline, like a gilt mark on a book spine.
 struct VIPBadge: View {
     var body: some View {
         Text("VIP")
-            .font(.system(size: 8.5, weight: .bold))
-            .foregroundStyle(Theme.accent)
+            .font(.system(size: 8, weight: .bold))
+            .tracking(0.6)
+            .foregroundStyle(Theme.gold)
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
             .overlay(
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .stroke(Theme.accent.opacity(0.8), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .stroke(Theme.gold.opacity(0.8), lineWidth: 0.8)
             )
     }
 }
@@ -188,38 +205,49 @@ struct QualityTag: View {
     var body: some View {
         Text(text)
             .font(.system(size: 9, weight: .semibold))
+            .tracking(0.4)
             .foregroundStyle(Theme.accent)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .overlay(
-                RoundedRectangle(cornerRadius: 3.5, style: .continuous)
-                    .stroke(Theme.accent.opacity(0.7), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .stroke(Theme.accent.opacity(0.65), lineWidth: 0.8)
             )
     }
 }
 
 // MARK: - Hover play overlay
 
+/// The play control on covers is a seal: it rotates into place as if being
+/// pressed onto the artwork, and blooms ink when clicked.
 struct PlayOverlayButton: View {
     var visible: Bool
-    var size: CGFloat = 40
+    var size: CGFloat = 38
     let action: () -> Void
 
+    @State private var presses = 0
+
     var body: some View {
-        Button(action: action) {
+        Button {
+            presses += 1
+            action()
+        } label: {
             Image(systemName: "play.fill")
-                .font(.system(size: size * 0.38, weight: .bold))
-                .foregroundStyle(.white)
+                .font(.system(size: size * 0.34, weight: .bold))
+                .foregroundStyle(Color(red: 0.99, green: 0.96, blue: 0.92))
+                .offset(x: 1)
                 .frame(width: size, height: size)
-                .background(Theme.accent.opacity(0.92), in: Circle())
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+                .background(Theme.accent, in: RoundedRectangle(cornerRadius: size * 0.24, style: .continuous))
+                .shadow(color: Theme.accentDeep.opacity(0.35), radius: 6, y: 3)
+                .inkBloom(trigger: presses, color: Theme.accent, scale: 2)
         }
         .buttonStyle(.pressable)
         .opacity(visible ? 1 : 0)
         .allowsHitTesting(visible)
         .accessibilityHidden(!visible)
-        .scaleEffect(visible ? 1 : 0.7)
-        .animation(AppAnimation.spring, value: visible)
+        .rotationEffect(.degrees(visible ? 0 : -14))
+        .scaleEffect(visible ? 1 : 0.6)
+        .animation(AppAnimation.bouncy, value: visible)
     }
 }
 

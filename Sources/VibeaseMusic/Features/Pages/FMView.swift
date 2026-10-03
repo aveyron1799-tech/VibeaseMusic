@@ -5,7 +5,7 @@ struct FMView: View {
     @Environment(PlayerService.self) private var player
     @Environment(AccountStore.self) private var account
     @Environment(\.openLogin) private var openLogin
-    @Environment(\.colorScheme) private var colorScheme
+    @State private var playPresses = 0
 
     var body: some View {
         GeometryReader { geometry in
@@ -29,20 +29,29 @@ struct FMView: View {
 
     // MARK: - Backdrop
 
+    /// Mountains drifting past very slowly, as if seen from a boat.
     private var backdrop: some View {
-        ZStack {
-            Color(nsColor: .windowBackgroundColor)
-            if let cover = track?.album.picUrl?.resizedImageURL(384) {
-                CachedAsyncImage(url: cover)
-                    .scaledToFill()
-                    .blur(radius: 80)
-                    .opacity(colorScheme == .dark ? 0.45 : 0.3)
-                    .saturation(1.4)
+        ZStack(alignment: .bottom) {
+            PaperBackground()
+            if let cover = track?.album.picUrl?.resizedImageURL(128) {
+                ArtworkWash(url: cover, height: 600)
+                    .frame(maxHeight: .infinity, alignment: .top)
             }
-            LinearGradient(
-                colors: [.clear, Color(nsColor: .windowBackgroundColor).opacity(0.6)],
-                startPoint: .top, endPoint: .bottom
-            )
+            TimelineView(.animation(minimumInterval: 1 / 15, paused: !(player.isPlaying && player.isFMMode))) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                GeometryReader { geo in
+                    let width = max(geo.size.width, 1)
+                    let drift = CGFloat((t * 6).truncatingRemainder(dividingBy: Double(width)))
+                    // Ridgelines meet the baseline at both ends, so two copies tile seamlessly.
+                    HStack(spacing: 0) {
+                        InkMountains(seed: 2.3).frame(width: width, height: 200)
+                        InkMountains(seed: 2.3).frame(width: width, height: 200)
+                    }
+                    .offset(x: -drift)
+                }
+                .frame(height: 200)
+            }
+            .mask(LinearGradient(colors: [.clear, .black, .black, .clear], startPoint: .leading, endPoint: .trailing))
         }
         .ignoresSafeArea()
         .animation(AppAnimation.smooth, value: track?.id)
@@ -52,39 +61,42 @@ struct FMView: View {
 
     private func content(coverSize: CGFloat) -> some View {
         VStack(spacing: 28) {
-
             ZStack {
+                Enso(lineWidth: 7, color: Theme.ink.opacity(track == nil ? 0.35 : 0.8), startAngle: -80)
+                    .frame(width: coverSize + 56, height: coverSize + 56)
                 if let cover = track?.album.picUrl?.resizedImageURL(768) {
                     CachedAsyncImage(url: cover)
                         .frame(width: coverSize, height: coverSize)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .shadow(color: .black.opacity(0.35), radius: 28, y: 14)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(Theme.hairline, lineWidth: 1))
+                        .shadow(color: Theme.shadow.opacity(1.3), radius: 22, y: 12)
+                        .saturation(player.isPlaying && player.isFMMode ? 1 : 0.4)
+                        .id(track?.id)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 } else {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.quaternary.opacity(0.4))
+                    Image(systemName: "wind")
+                        .font(.system(size: 44, weight: .ultraLight))
+                        .foregroundStyle(Theme.ink.opacity(0.35))
                         .frame(width: coverSize, height: coverSize)
-                        .overlay(
-                            Image(systemName: "wave.3.right.circle")
-                                .font(.system(size: 56, weight: .light))
-                                .foregroundStyle(.tertiary)
-                        )
                 }
             }
-            .scaleEffect(player.isPlaying && player.isFMMode ? 1 : 0.94)
-            .animation(AppAnimation.bouncy, value: player.isPlaying && player.isFMMode)
+            .scaleEffect(player.isPlaying && player.isFMMode ? 1 : 0.96)
+            .animation(.easeInOut(duration: 0.9), value: player.isPlaying && player.isFMMode)
+            .animation(.easeInOut(duration: 0.6), value: track?.id)
 
-            VStack(spacing: 6) {
+            VStack(spacing: 8) {
                 HStack(spacing: 8) {
                     Text(track?.name ?? String(localized: "私人漫游"))
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.serif(25, .bold))
+                        .foregroundStyle(Theme.ink)
                         .lineLimit(1)
                     if track?.fee == 1 {
                         VIPBadge()
                     }
                 }
-                Text(track?.artistNames ?? String(localized: "根据你的口味漫游好音乐"))
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                Text(track?.artistNames ?? String(localized: "随心而行，一曲一山"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.ink.opacity(0.55))
                     .lineLimit(1)
             }
             .frame(maxWidth: 420)
@@ -95,84 +107,75 @@ struct FMView: View {
                 Button {
                     player.startFM()
                 } label: {
-                    Label("开始漫游", systemImage: "wave.3.right")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 12)
-                        .background(Theme.accentGradient, in: Capsule())
-                        .shadow(color: Theme.accent.opacity(0.35), radius: 10, y: 3)
+                    Label("开始漫游", systemImage: "wind")
                 }
-                .buttonStyle(.pressable)
+                .buttonStyle(.ink)
+                .controlSize(.large)
             }
-
         }
         .padding(.horizontal, 40)
+        .padding(.bottom, 60)
     }
 
     private var controls: some View {
-        HStack(spacing: 26) {
-            Button {
-                player.fmTrash()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 48, height: 48)
-                    .background(.primary.opacity(0.06), in: Circle())
-            }
-            .buttonStyle(.pressable)
-            .help("不喜欢，换一首")
+        HStack(spacing: 24) {
+            fmButton(icon: "hand.thumbsdown", help: "不喜欢，换一首") { player.fmTrash() }
 
             Button {
+                playPresses += 1
                 player.togglePlayPause()
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Theme.accentGradient)
-                        .frame(width: 64, height: 64)
-                        .shadow(color: Theme.accent.opacity(0.4), radius: 12, y: 4)
+                        .fill(Theme.ink)
+                        .frame(width: 62, height: 62)
+                        .shadow(color: Theme.shadow.opacity(1.3), radius: 12, y: 6)
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundStyle(Theme.onInk)
+                        .offset(x: player.isPlaying ? 0 : 2)
                         .contentTransition(.symbolEffect(.replace))
                 }
+                .inkBloom(trigger: playPresses, color: Theme.ink, scale: 2.4)
             }
             .buttonStyle(.pressable)
 
-            Button {
-                player.fmNext()
-            } label: {
-                Image(systemName: "forward.fill")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 48, height: 48)
-                    .background(.primary.opacity(0.06), in: Circle())
-            }
-            .buttonStyle(.pressable)
-            .help("下一首")
+            fmButton(icon: "forward.fill", help: "下一首") { player.fmNext() }
 
             if let track {
-                LikeButton(trackID: track.id, size: 16)
-                    .frame(width: 48, height: 48)
-                    .background(.primary.opacity(0.06), in: Circle())
+                LikeButton(trackID: track.id, size: 16, diameter: 46)
+                    .overlay(Circle().strokeBorder(Theme.ink.opacity(0.14), lineWidth: 0.75))
             }
         }
     }
 
+    private func fmButton(icon: String, help: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(Theme.ink.opacity(0.75))
+                .frame(width: 46, height: 46)
+                .overlay(Circle().strokeBorder(Theme.ink.opacity(0.14), lineWidth: 0.75))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.pressable)
+        .help(help)
+    }
+
     private var loginPrompt: some View {
         VStack(spacing: 16) {
-            Image(systemName: "wave.3.right.circle")
-                .font(.system(size: 52, weight: .light))
-                .foregroundStyle(.tertiary)
+            Enso(lineWidth: 5, color: Theme.ink.opacity(0.55))
+                .frame(width: 90, height: 90)
+                .overlay(Image(systemName: "wind").font(.system(size: 24, weight: .light))
+                    .foregroundStyle(Theme.ink.opacity(0.5)))
             Text("登录后开启私人漫游")
-                .font(.headline)
+                .font(.serif(18, .bold))
+                .foregroundStyle(Theme.ink)
             Text("网易云会根据你的听歌口味推荐音乐")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.ink.opacity(0.55))
             Button("登录") { openLogin() }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
+                .buttonStyle(.ink)
         }
     }
 }

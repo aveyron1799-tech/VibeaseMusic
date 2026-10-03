@@ -31,9 +31,21 @@ enum UnblockService {
         return nil
     }
 
+    /// `.urlQueryAllowed` keeps `&`, `=`, `+` and `?` literal, which split or
+    /// corrupt a single query value such as "Simon & Garfunkel".
+    private static let queryValueAllowed: CharacterSet = {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=+?#/")
+        return allowed
+    }()
+
     private static func keyword(for track: Track) -> String {
         "\(track.name) \(track.artists.first?.name ?? "")"
             .trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func encodedKeyword(for track: Track) -> String {
+        keyword(for: track).addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? ""
     }
 
     /// UNM's `select`: first of the top 5 within ±5 s of the target duration, else the first.
@@ -74,8 +86,7 @@ enum UnblockService {
     // MARK: - kuwo
 
     private static func kuwo(_ track: Track) async -> URL? {
-        let query = keyword(for: track)
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let query = encodedKeyword(for: track)
         let searchURL = "http://search.kuwo.cn/r.s?&correct=1&vipver=1&stype=comprehensive&encoding=utf8"
             + "&rformat=json&mobi=1&show_copyright_off=1&searchapi=6&all=\(query)"
         guard let data = await get(searchURL),
@@ -110,8 +121,7 @@ enum UnblockService {
     // MARK: - kugou
 
     private static func kugou(_ track: Track) async -> URL? {
-        let query = keyword(for: track)
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let query = encodedKeyword(for: track)
         let searchURL = "http://mobilecdn.kugou.com/api/v3/search/song?format=json&keyword=\(query)&page=1&pagesize=10"
         guard let data = await get(searchURL),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

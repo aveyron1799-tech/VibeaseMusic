@@ -110,12 +110,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            let icon = NSImage(contentsOf: iconURL) {
             NSApp.applicationIconImage = icon
         }
+        ImageCache.pruneDiskCacheInBackground()
+        #if DEBUG
+        DebugSnapshot.scheduleIfRequested()
+        #endif
         // Space toggles play/pause unless a text field is being edited.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             let noModifiers = event.modifierFlags
                 .intersection([.command, .option, .control, .shift]).isEmpty
             let editingText = NSApp.keyWindow?.firstResponder is NSText
                 || NSApp.keyWindow?.firstResponder is NSTextView
+
+            // ⌘← / ⌘→ are the next/previous menu shortcuts, and menu key equivalents
+            // win over the field editor. Hand them to the text field while typing.
+            if event.type == .keyDown, editingText, event.keyCode == 123 || event.keyCode == 124,
+               event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command,
+               let responder = NSApp.keyWindow?.firstResponder {
+                responder.keyDown(with: event)
+                return nil
+            }
 
             if event.keyCode == 49 {
                 if event.type == .keyUp {
@@ -146,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         PlayerService.shared.flushPendingStateWrites()
+        NeteaseClient.shared.flushPendingCookieWrites()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

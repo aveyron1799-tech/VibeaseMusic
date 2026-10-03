@@ -36,29 +36,27 @@ struct ArtistAlbumsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 // Header
                 HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(artistName)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Eyebrow(text: artistName)
                         Text("全部专辑")
-                            .font(.largeTitle.weight(.bold))
+                            .font(.serif(29, .bold))
+                            .foregroundStyle(Theme.ink)
                     }
 
                     Spacer()
 
-                    Picker("筛选", selection: $filter) {
+                    HStack(spacing: 6) {
                         ForEach(AlbumFilter.allCases) { item in
-                            Text(item.rawValue).tag(item)
+                            Button(LocalizedStringKey(item.rawValue)) { filter = item }
+                                .buttonStyle(.chip(isSelected: filter == item))
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .frame(width: 220)
                 }
                 .padding(.horizontal, Theme.Layout.contentInset)
-                .padding(.top, 16)
+                .padding(.top, 22)
 
                 if isLoading && allAlbums.isEmpty {
-                    ProgressView()
+                    InkLoader(size: 36, color: Theme.ink.opacity(0.55))
                         .frame(maxWidth: .infinity, minHeight: 300)
                 } else if let errorMessage, allAlbums.isEmpty {
                     ErrorStateView(message: errorMessage) {
@@ -72,6 +70,7 @@ struct ArtistAlbumsView: View {
                         subtitle: "没有找到符合筛选条件的专辑作品"
                     )
                     .frame(minHeight: 260)
+                    loadMoreRow
                 } else {
                     CardGrid {
                         ForEach(filteredAlbums) { album in
@@ -87,23 +86,7 @@ struct ArtistAlbumsView: View {
                     }
                     .padding(.horizontal, Theme.Layout.contentInset)
 
-                    if hasMore {
-                        HStack {
-                            Spacer()
-                            if isLoadingMore {
-                                ProgressView()
-                                    .controlSize(.small)
-                            } else {
-                                Button("加载更多专辑") {
-                                    Task { await loadMore() }
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(Theme.accent)
-                            }
-                            Spacer()
-                        }
-                        .padding(.vertical, 24)
-                    }
+                    loadMoreRow
                 }
 
                 Color.clear.frame(height: 16)
@@ -113,6 +96,26 @@ struct ArtistAlbumsView: View {
         .navigationTitle("\(artistName) 的专辑")
         .task(id: artistID) {
             await loadInitial()
+        }
+    }
+
+    /// Also shown under the empty state: the filtered kind may only exist on later pages.
+    @ViewBuilder
+    private var loadMoreRow: some View {
+        if hasMore {
+            HStack {
+                Spacer()
+                if isLoadingMore {
+                    InkLoader(size: 24, color: Theme.ink.opacity(0.5))
+                } else {
+                    Button("加载更多专辑") {
+                        Task { await loadMore() }
+                    }
+                    .buttonStyle(.inkOutline)
+                }
+                Spacer()
+            }
+            .padding(.vertical, 24)
         }
     }
 

@@ -141,6 +141,10 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 1).id("home-top")
+                    HomeGreeting(nickname: account.profile?.nickname)
+                        .padding(.horizontal, Theme.Layout.contentInset)
+                        .padding(.top, 14)
+                        .padding(.bottom, 26)
                     switch model.state {
                     case .idle, .loading:
                         loadingBody
@@ -172,24 +176,23 @@ struct HomeView: View {
     }
 
     private var loadingBody: some View {
-        VStack(alignment: .leading, spacing: 32) {
-            HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 40) {
+            HStack(spacing: 18) {
                 ForEach(0..<3, id: \.self) { _ in
                     SkeletonView(cornerRadius: Theme.Radius.large)
-                        .frame(width: 230, height: 132)
+                        .frame(height: 150)
                 }
             }
             SkeletonShelf()
             SkeletonShelf()
         }
-        .padding(Theme.Layout.contentInset)
+        .padding(.horizontal, Theme.Layout.contentInset)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var loadedBody: some View {
-        LazyVStack(alignment: .leading, spacing: 34) {
-            featureCards
-                .padding(.top, 8)
+        LazyVStack(alignment: .leading, spacing: 40) {
+            featureCardRow
 
             if !model.recommendPlaylists.isEmpty {
                 Shelf(title: "推荐歌单") {
@@ -217,10 +220,7 @@ struct HomeView: View {
             if !model.toplists.isEmpty {
                 Shelf(title: "排行榜", seeAll: nil) {
                     ForEach(model.toplists) { toplist in
-                        NavigationLink(value: Destination.playlist(toplist.id)) {
-                            toplistCard(toplist)
-                        }
-                        .buttonStyle(.interactiveCard)
+                        ToplistCard(toplist: toplist)
                     }
                 }
             }
@@ -236,83 +236,55 @@ struct HomeView: View {
             if !model.topArtists.isEmpty {
                 Shelf(title: "推荐歌手") {
                     ForEach(model.topArtists) { artist in
-                        artistCard(artist)
+                        NavigationLink(value: Destination.artist(artist.id)) {
+                            ArtistPortrait(url: artist.picUrl?.resizedImageURL(256), name: artist.name)
+                        }
+                        .buttonStyle(.interactiveCard)
                     }
                 }
             }
 
-            Color.clear.frame(height: 8)
+            ColophonView()
         }
-        .padding(.vertical, Theme.Layout.contentInset - 8)
+        .padding(.bottom, Theme.Layout.contentInset - 8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Feature cards
 
-    @ViewBuilder
-    private var featureCards: some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: 12) { featureCardRow }
-        } else {
-            featureCardRow
-        }
-    }
-
     private var featureCardRow: some View {
-            HStack(spacing: 16) {
-                if account.isLoggedIn {
-                    NavigationLink(value: Destination.daily) {
-                        FeatureCard(
-                            title: "每日推荐",
-                            subtitle: "根据你的口味生成",
-                            icon: "calendar",
-                            coverURL: model.dailyFirstCover?.resizedImageURL(512),
-                            showsDate: true
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        player.startFM()
-                    } label: {
-                        FeatureCard(
-                            title: "私人漫游",
-                            subtitle: "从喜欢的歌开始漫游",
-                            icon: "wave.3.right.circle.fill",
-                            gradient: [Color(red: 0.16, green: 0.20, blue: 0.42),
-                                       Color(red: 0.36, green: 0.24, blue: 0.62)]
-                        )
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        startHeartbeatMode()
-                    } label: {
-                        FeatureCard(
-                            title: "心动模式",
-                            subtitle: "你的红心歌曲和相似推荐",
-                            icon: "heart.circle.fill",
-                            gradient: [Color(red: 0.85, green: 0.19, blue: 0.41),
-                                       Color(red: 0.98, green: 0.42, blue: 0.34)]
-                        )
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Button {
-                        openLogin()
-                    } label: {
-                        FeatureCard(
-                            title: "登录网易云音乐",
-                            subtitle: "解锁每日推荐、私人漫游与心动模式",
-                            icon: "person.crop.circle.badge.checkmark",
-                            gradient: [Theme.accentDeep, Theme.accent]
-                        )
-                    }
-                    .buttonStyle(.plain)
+        HStack(spacing: 18) {
+            if account.isLoggedIn {
+                NavigationLink(value: Destination.daily) {
+                    FeatureCard(kind: .daily(coverURL: model.dailyFirstCover?.resizedImageURL(256)),
+                                title: "每日推荐", subtitle: "依你的口味，每日一笺")
                 }
+                .buttonStyle(.plain)
+
+                Button {
+                    player.startFM()
+                } label: {
+                    FeatureCard(kind: .fm, title: "私人漫游", subtitle: "随心而行，一曲一山")
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    startHeartbeatMode()
+                } label: {
+                    FeatureCard(kind: .heartbeat, title: "心动模式", subtitle: "红心所系，相似而来")
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    openLogin()
+                } label: {
+                    FeatureCard(kind: .login, title: "登录网易云音乐",
+                                subtitle: "解锁每日推荐、私人漫游与心动模式")
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, Theme.Layout.contentInset)
-            .padding(.vertical, 6)
+        }
+        .padding(.horizontal, Theme.Layout.contentInset)
     }
 
     private func startHeartbeatMode() {
@@ -365,185 +337,285 @@ struct HomeView: View {
         )
     }
 
-    private func artistCard(_ artist: ArtistSummary) -> some View {
-        NavigationLink(value: Destination.artist(artist.id)) {
-            VStack(spacing: 10) {
-                CachedAsyncImage(url: artist.picUrl?.resizedImageURL(256))
-                    .frame(width: 128, height: 128)
-                    .clipShape(Circle())
-                    .overlay(Circle().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5))
-                Text(artist.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-            }
-            .frame(width: 140)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.interactiveCard)
-    }
-
-    private func toplistCard(_ toplist: ToplistItem) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .bottomLeading) {
-                CachedAsyncImage(url: toplist.coverImgUrl?.resizedImageURL(384))
-                    .frame(width: Theme.Layout.cardSize, height: Theme.Layout.cardSize)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous))
-                LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous))
-                Text(toplist.updateFrequency ?? "")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .padding(8)
-            }
-            .frame(width: Theme.Layout.cardSize, height: Theme.Layout.cardSize)
-            Text(toplist.name)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-        }
-        .frame(width: Theme.Layout.cardSize, alignment: .leading)
-        .contentShape(Rectangle())
-    }
-
     private func playPlaylist(_ id: Int) {
         Task {
             guard let detail = try? await NeteaseAPI.playlistDetail(id: id) else { return }
             var tracks = detail.playlist.tracks
-            if tracks.isEmpty {
+            if tracks.count < detail.playlist.trackCount {
                 let ids = detail.playlist.trackIds.map(\.id)
-                tracks = (try? await NeteaseAPI.songDetails(ids: Array(ids.prefix(500))))?.songs ?? []
+                if let full = try? await NeteaseAPI.songDetails(ids: Array(ids.prefix(1000))),
+                   !full.songs.isEmpty {
+                    tracks = full.songs
+                }
             }
+            guard !tracks.isEmpty else { return }
             player.play(tracks: tracks, source: .playlist(id))
         }
+    }
+}
+
+// MARK: - Greeting
+
+/// Time-of-day greeting, the date written in Chinese numerals, the current
+/// solar term stamped as a seal, and a line of seasonal verse.
+private struct HomeGreeting: View {
+    let nickname: String?
+
+    @State private var stamped = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let now = Date.now
+        let term = SolarTerm.current(now)
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(ChineseDate.string(for: now))
+                    .font(.system(size: 11.5, weight: .medium))
+                    .tracking(2.5)
+                    .foregroundStyle(Theme.ink.opacity(0.5))
+                HStack(alignment: .firstTextBaseline, spacing: 0) {
+                    Text(Self.greeting(for: now))
+                    if let nickname, !nickname.isEmpty {
+                        Text("，")
+                        Text(nickname)
+                    }
+                }
+                .font(.serif(32, .bold))
+                .foregroundStyle(Theme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                HStack(spacing: 10) {
+                    Rectangle()
+                        .fill(Theme.accent)
+                        .frame(width: 14, height: 1.2)
+                    Text(term.verse)
+                        .font(.serif(13.5))
+                        .tracking(1.5)
+                        .foregroundStyle(Theme.ink.opacity(0.62))
+                }
+            }
+            Spacer(minLength: 24)
+            SealStamp(text: term.name, size: 30, vertical: true)
+                .rotationEffect(.degrees(stamped ? -4 : -16))
+                .scaleEffect(stamped ? 1 : 1.5)
+                .opacity(stamped ? 0.92 : 0)
+                .padding(.top, 4)
+                .padding(.trailing, 6)
+                .help("节气 · \(term.name)")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(alignment: .bottomTrailing) {
+            InkMountains()
+                .frame(width: 560, height: 120)
+                .mask(LinearGradient(colors: [.clear, .black, .black], startPoint: .leading, endPoint: .trailing))
+                .offset(x: 28, y: 22)
+        }
+        .onAppear {
+            guard !stamped else { return }
+            if reduceMotion {
+                stamped = true
+            } else {
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.62).delay(0.45)) { stamped = true }
+            }
+        }
+    }
+
+    static func greeting(for date: Date) -> String {
+        switch Calendar.current.component(.hour, from: date) {
+        case 5..<9: return String(localized: "早安")
+        case 9..<12: return String(localized: "上午好")
+        case 12..<14: return String(localized: "午安")
+        case 14..<18: return String(localized: "下午好")
+        case 18..<23: return String(localized: "晚上好")
+        default: return String(localized: "夜深了")
+        }
+    }
+}
+
+enum ChineseDate {
+    private static let digits = ["〇", "一", "二", "三", "四", "五", "六", "七", "八", "九"]
+    private static let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
+
+    static func numeral(_ value: Int) -> String {
+        switch value {
+        case 0..<10: return digits[value]
+        case 10: return "十"
+        case 11..<20: return "十" + digits[value % 10]
+        default:
+            return digits[value / 10] + "十" + (value % 10 == 0 ? "" : digits[value % 10])
+        }
+    }
+
+    static func string(for date: Date, calendar: Calendar = .current) -> String {
+        let month = calendar.component(.month, from: date)
+        let day = calendar.component(.day, from: date)
+        let weekday = calendar.component(.weekday, from: date)
+        return "\(numeral(month))月\(numeral(day))日 · 星期\(weekdays[(weekday - 1) % 7])"
     }
 }
 
 // MARK: - Feature card
 
 struct FeatureCard: View {
+    enum Kind {
+        case daily(coverURL: URL?)
+        case fm, heartbeat, login
+    }
+
+    let kind: Kind
     let title: LocalizedStringKey
     let subtitle: LocalizedStringKey
-    let icon: String
-    var coverURL: URL?
-    var gradient: [Color] = [Color(red: 0.75, green: 0.16, blue: 0.22),
-                             Color(red: 0.95, green: 0.35, blue: 0.28)]
-    var showsDate = false
 
     @State private var isHovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top) {
-                Group {
-                    if showsDate {
-                        VStack(spacing: 1) {
-                            Text("今日").font(.system(size: 9, weight: .medium))
-                            Text("\(Calendar.current.component(.day, from: .now))")
-                                .font(.system(size: 22, weight: .semibold, design: .rounded))
-                        }
-                    } else {
-                        Image(systemName: icon)
-                            .font(.system(size: 25, weight: .medium))
-                    }
-                }
-                .foregroundStyle(gradient[0])
-                .frame(width: 46, height: 46)
-                .background(.background.opacity(0.55), in: RoundedRectangle(cornerRadius: 14))
-                Spacer()
-                if let coverURL {
-                    CachedAsyncImage(url: coverURL)
-                        .frame(width: 64, height: 64)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .rotationEffect(.degrees(isHovering && !reduceMotion ? 0 : 7))
-                        .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
-                        .accessibilityHidden(true)
-                } else {
-                    Image(systemName: showsDate ? "calendar" : icon)
-                        .font(.system(size: 64, weight: .ultraLight))
-                        .foregroundStyle(gradient[1].opacity(isHovering ? 0.22 : 0.12))
-                        .rotationEffect(.degrees(isHovering && !reduceMotion ? -8 : 0))
-                        .accessibilityHidden(true)
-                }
-            }
-            Spacer(minLength: 12)
-            HStack(alignment: .bottom, spacing: 8) {
-                VStack(alignment: .leading, spacing: 5) {
+            Spacer(minLength: 0)
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(title)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.primary)
+                        .font(.serif(19, .bold))
+                        .foregroundStyle(Theme.ink)
                     Text(subtitle)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.ink.opacity(0.55))
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary.opacity(isHovering ? 0.85 : 0.4))
-                    .offset(x: isHovering && !reduceMotion ? 2 : 0,
-                            y: isHovering && !reduceMotion ? -2 : 0)
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isHovering ? Theme.accent : Theme.ink.opacity(0.35))
+                    .offset(x: isHovering && !reduceMotion ? 3 : 0)
             }
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .frame(height: 166)
-        .background {
-            LinearGradient(colors: [gradient[0].opacity(0.15), gradient[1].opacity(isHovering ? 0.28 : 0.2)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 22))
-        .compatGlass(interactive: true, in: RoundedRectangle(cornerRadius: 22))
-        .shadow(color: gradient[0].opacity(isHovering ? 0.13 : 0.03), radius: isHovering ? 10 : 3, y: 4)
+        .frame(height: 150)
+        .background(alignment: .topTrailing) { illustration }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.large, style: .continuous))
+        .paperSheet(cornerRadius: Theme.Radius.large, lifted: isHovering)
         .offset(y: isHovering && !reduceMotion ? -3 : 0)
-        .contentShape(RoundedRectangle(cornerRadius: 22))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.large, style: .continuous))
         .onHover { isHovering = $0 }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: isHovering)
+        .animation(reduceMotion ? nil : AppAnimation.spring, value: isHovering)
+    }
+
+    @ViewBuilder
+    private var illustration: some View {
+        switch kind {
+        case .daily(let coverURL):
+            HStack(alignment: .top, spacing: 12) {
+                if let coverURL {
+                    CachedAsyncImage(url: coverURL)
+                        .frame(width: 54, height: 54)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .strokeBorder(Theme.hairline, lineWidth: 0.75))
+                        .shadow(color: Theme.shadow, radius: isHovering ? 8 : 3, y: 3)
+                        .rotationEffect(.degrees(isHovering && !reduceMotion ? 0 : 6))
+                        .padding(.top, 8)
+                }
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("\(Calendar.current.component(.day, from: .now))")
+                        .font(.serif(58, .bold))
+                        .foregroundStyle(Theme.ink.opacity(0.88))
+                    Text(ChineseDate.numeral(Calendar.current.component(.month, from: .now)) + "月")
+                        .font(.serif(11, .medium))
+                        .tracking(2)
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+            .padding(.top, 10)
+            .padding(.trailing, 20)
+        case .fm:
+            InkMountains(seed: 3.1)
+                .frame(width: 260, height: 104)
+                .offset(x: isHovering && !reduceMotion ? -18 : 0, y: 0)
+                .animation(.easeInOut(duration: 2.4), value: isHovering)
+                .mask(LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .center))
+                .overlay(alignment: .topTrailing) {
+                    Circle()
+                        .fill(Theme.accent.opacity(0.85))
+                        .frame(width: 16, height: 16)
+                        .offset(x: isHovering && !reduceMotion ? -30 : -46, y: isHovering && !reduceMotion ? 10 : 20)
+                        .animation(.easeInOut(duration: 2.4), value: isHovering)
+                }
+                .padding(.top, 8)
+        case .heartbeat:
+            ZStack {
+                ForEach(0..<3, id: \.self) { ring in
+                    Enso(progress: 1, lineWidth: 2.2, color: Theme.ink.opacity(0.18 - Double(ring) * 0.04),
+                         startAngle: -100 + Double(ring) * 70)
+                        .frame(width: 64 + CGFloat(ring) * 34, height: 64 + CGFloat(ring) * 34)
+                        .scaleEffect(isHovering && !reduceMotion ? 1.08 : 1)
+                        .animation(.easeOut(duration: 0.8).delay(Double(ring) * 0.08), value: isHovering)
+                }
+                SealStamp(text: "心", size: 34)
+                    .rotationEffect(.degrees(isHovering ? 0 : -6))
+                    .scaleEffect(isHovering && !reduceMotion ? 1.06 : 1)
+            }
+            .frame(width: 150, height: 150)
+            .offset(x: 28, y: -18)
+        case .login:
+            Enso(progress: isHovering ? 1 : 0.82, lineWidth: 5, color: Theme.ink.opacity(0.75))
+                .frame(width: 92, height: 92)
+                .padding(18)
+                .animation(.easeOut(duration: 0.6), value: isHovering)
+        }
     }
 }
 
-/// Card body without its own Button wrapper (for use inside NavigationLink).
-struct CoverCardBody: View {
-    let coverURL: URL?
-    let title: String
-    var subtitle: String?
-    var playCount: Int = 0
-    var size: CGFloat = Theme.Layout.cardSize
+// MARK: - Toplist card
+
+/// A chart cover with its update cadence written vertically, like a book spine.
+struct ToplistCard: View {
+    let toplist: ToplistItem
+    @State private var isHovering = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .bottomLeading) {
-                CachedAsyncImage(url: coverURL)
-                    .frame(width: size, height: size)
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
-                            .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
-                    )
-                if playCount > 0 {
-                    PlayCountBadge(count: playCount)
-                        .padding(6)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                }
-            }
-            .frame(width: size, height: size)
-
-            Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .foregroundStyle(.primary)
-                .frame(maxWidth: size, alignment: .leading)
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.system(size: 11))
+        NavigationLink(value: Destination.playlist(toplist.id)) {
+            VStack(alignment: .leading, spacing: 9) {
+                CoverArtwork(url: toplist.coverImgUrl?.resizedImageURL(384), lifted: isHovering)
+                    .overlay(alignment: .bottomLeading) {
+                        if let frequency = toplist.updateFrequency, !frequency.isEmpty {
+                            Text(frequency)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(Color(red: 0.98, green: 0.96, blue: 0.92))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(Color(red: 0.1, green: 0.09, blue: 0.08).opacity(0.45), in: Capsule())
+                                .padding(8)
+                        }
+                    }
+                Text(toplist.name)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Theme.ink.opacity(0.92))
                     .lineLimit(1)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: size, alignment: .leading)
             }
+            .frame(width: Theme.Layout.cardSize, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .frame(width: size, alignment: .leading)
-        .contentShape(Rectangle())
+        .buttonStyle(.interactiveCard)
+        .onHover { isHovering = $0 }
+    }
+}
+
+// MARK: - Colophon
+
+/// The end of the page: a small ensō and a line of quiet.
+struct ColophonView: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            Enso(lineWidth: 2.4, color: Theme.ink.opacity(0.28))
+                .frame(width: 30, height: 30)
+            Text("一曲终了，余音未尽")
+                .font(.serif(11.5))
+                .tracking(3)
+                .foregroundStyle(Theme.ink.opacity(0.35))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 10)
+        .padding(.bottom, 20)
     }
 }
