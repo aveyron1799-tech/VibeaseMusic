@@ -1,6 +1,15 @@
 import SwiftUI
 
-struct SidebarView: View {
+/// Equatable on its visible inputs only: the window re-renders on every
+/// sidebar show/hide, and re-evaluating every row (whose action closures never
+/// compare equal) at the first frame of the slide caused a visible hitch.
+struct SidebarView: View, Equatable {
+    nonisolated static func == (lhs: SidebarView, rhs: SidebarView) -> Bool {
+        MainActor.assumeIsolated {
+            lhs.selection == rhs.selection && lhs.showLogin == rhs.showLogin
+        }
+    }
+
     @Binding var selection: SidebarItem
     @Binding var showLogin: Bool
     let onHomeDoubleClick: () -> Void
@@ -11,35 +20,30 @@ struct SidebarView: View {
     @State private var avatarImage: NSImage?
 
     var body: some View {
-        List {
-            Section {
-                SidebarBrand()
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 10, trailing: 6))
-                row(.home, title: "推荐", icon: "house")
-                row(.explore, title: "精选", icon: "square.grid.2x2")
-                row(.fm, title: "漫游", icon: "wind")
-            }
-
-            if account.hasAuthCookie {
-                Section {
-                    row(.likedSongs, title: "我喜欢的音乐", icon: "heart")
-                    row(.daily, title: "每日推荐", icon: "calendar")
-                    row(.recents, title: "最近播放", icon: "clock")
-                    row(.collections, title: "我的收藏", icon: "star")
-                    row(.cloud, title: "音乐云盘", icon: "icloud")
-                } header: {
-                    SidebarSectionTitle("我的")
+        // A plain scroll view rather than `List`: a sidebar List is an
+        // NSTableView with one hosting view per row, and re-syncing all of them
+        // made every sidebar show/hide hitch for ~100ms.
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 2) {
+                if Theme.isWashi {
+                    SidebarBrand()
+                        .padding(.leading, 4)
+                        .padding(.bottom, 10)
                 }
+                row(.home, title: "推荐", icon: "house", classicIcon: "house.fill")
+                row(.explore, title: "精选", icon: "square.grid.2x2", classicIcon: "square.grid.2x2.fill")
+                row(.fm, title: "漫游", icon: "wind", classicIcon: "wave.3.right.circle.fill")
 
-                if !account.createdPlaylists.isEmpty {
-                    Section {
-                        ForEach(account.createdPlaylists) { playlist in
-                            playlistRow(playlist)
-                        }
-                    } header: {
-                        HStack {
-                            SidebarSectionTitle("创建的歌单")
-                            Spacer()
+                if account.hasAuthCookie {
+                    SidebarSectionHeader("我的")
+                    row(.likedSongs, title: "我喜欢的音乐", icon: "heart", classicIcon: "heart.fill")
+                    row(.daily, title: "每日推荐", icon: "calendar", classicIcon: "calendar")
+                    row(.recents, title: "最近播放", icon: "clock", classicIcon: "clock.fill")
+                    row(.collections, title: "我的收藏", icon: "star", classicIcon: "star.fill")
+                    row(.cloud, title: "音乐云盘", icon: "icloud", classicIcon: "icloud.fill")
+
+                    if !account.createdPlaylists.isEmpty {
+                        SidebarSectionHeader("创建的歌单") {
                             Button {
                                 showNewPlaylist = true
                             } label: {
@@ -50,25 +54,26 @@ struct SidebarView: View {
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
-                            // Align with the trailing edge of the playlist rows
-                            // (rows carry 6pt list inset + 8pt inner padding).
-                            .padding(.trailing, 14)
+                            .help("新建歌单")
+                        }
+                        ForEach(account.createdPlaylists) { playlist in
+                            playlistRow(playlist)
                         }
                     }
-                }
 
-                if !account.subscribedPlaylists.isEmpty {
-                    Section {
+                    if !account.subscribedPlaylists.isEmpty {
+                        SidebarSectionHeader("收藏的歌单")
                         ForEach(account.subscribedPlaylists) { playlist in
                             playlistRow(playlist)
                         }
-                    } header: {
-                        SidebarSectionTitle("收藏的歌单")
                     }
                 }
             }
+            .padding(.leading, 10)
+            .padding(.trailing, 4)
+            .padding(.top, 4)
+            .padding(.bottom, 12)
         }
-        .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         .background { PaperBackground(tone: .sidebar).ignoresSafeArea() }
         .thinAutoScrollIndicators(.vertical)
@@ -102,9 +107,10 @@ struct SidebarView: View {
         }
     }
 
-    private func row(_ item: SidebarItem, title: LocalizedStringKey, icon: String) -> some View {
+    private func row(_ item: SidebarItem, title: LocalizedStringKey, icon: String,
+                     classicIcon: String) -> some View {
         SidebarRow(
-            title: title, icon: icon, isSelected: selection == item,
+            title: title, icon: Theme.isWashi ? icon : classicIcon, isSelected: selection == item,
             action: { selection = item },
             onDoubleClick: item == .home ? onHomeDoubleClick : nil
         )
@@ -183,7 +189,13 @@ struct SidebarView: View {
                 .padding(.vertical, 10)
             }
         }
-        .background(Theme.paperDeep.opacity(0.92))
+        .background {
+            if Theme.isWashi {
+                Theme.paperDeep.opacity(0.92)
+            } else {
+                Rectangle().fill(.ultraThinMaterial)
+            }
+        }
     }
 }
 
@@ -221,15 +233,51 @@ private struct SidebarBrand: View {
     }
 }
 
+private struct SidebarSectionHeader<Accessory: View>: View {
+    let title: LocalizedStringKey
+    let accessory: Accessory
+
+    init(_ title: LocalizedStringKey, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack {
+            SidebarSectionTitle(title)
+            Spacer(minLength: 4)
+            accessory
+        }
+        // Align the title with row text and the accessory with the row edge
+        // (rows carry 6pt trailing inset + 8pt inner padding).
+        .padding(.leading, 8)
+        .padding(.trailing, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 4)
+    }
+}
+
+extension SidebarSectionHeader where Accessory == EmptyView {
+    init(_ title: LocalizedStringKey) {
+        self.init(title) { EmptyView() }
+    }
+}
+
 private struct SidebarSectionTitle: View {
     let title: LocalizedStringKey
     init(_ title: LocalizedStringKey) { self.title = title }
 
     var body: some View {
-        Text(title)
-            .font(.serif(11, .medium))
-            .tracking(2)
-            .foregroundStyle(Theme.ink.opacity(0.42))
+        if Theme.isWashi {
+            Text(title)
+                .font(.serif(11, .medium))
+                .tracking(2)
+                .foregroundStyle(Theme.ink.opacity(0.42))
+        } else {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -347,20 +395,25 @@ private struct SidebarSelection: View {
     let isHovering: Bool
 
     var body: some View {
-        ZStack(alignment: .leading) {
+        if Theme.isWashi {
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
+                    .fill(isHovering && !isSelected ? Theme.wash : .clear)
+                PaintedBrush(painted: isSelected, color: Theme.ink.opacity(0.085))
+                    .padding(.vertical, 1)
+                Circle()
+                    .fill(Theme.accent)
+                    .frame(width: 4, height: 4)
+                    .offset(x: -1)
+                    .scaleEffect(isSelected ? 1 : 0.01)
+                    .opacity(isSelected ? 1 : 0)
+                    .animation(AppAnimation.bouncy.delay(isSelected ? 0.18 : 0), value: isSelected)
+            }
+            .animation(AppAnimation.quick, value: isHovering)
+        } else {
             RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
-                .fill(isHovering && !isSelected ? Theme.wash : .clear)
-            PaintedBrush(painted: isSelected, color: Theme.ink.opacity(0.085))
-                .padding(.vertical, 1)
-            Circle()
-                .fill(Theme.accent)
-                .frame(width: 4, height: 4)
-                .offset(x: -1)
-                .scaleEffect(isSelected ? 1 : 0.01)
-                .opacity(isSelected ? 1 : 0)
-                .animation(AppAnimation.bouncy.delay(isSelected ? 0.18 : 0), value: isSelected)
+                .fill(isSelected ? Color.secondary.opacity(0.22) : .clear)
         }
-        .animation(AppAnimation.quick, value: isHovering)
     }
 }
 
@@ -376,14 +429,21 @@ private struct SidebarRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: isSelected ? .medium : .light))
-                    .foregroundStyle(isSelected ? Theme.ink : Theme.ink.opacity(0.62))
-                    .frame(width: 18)
-                    .symbolEffect(.bounce, value: isSelected)
+                if Theme.isWashi {
+                    Image(systemName: icon)
+                        .font(.system(size: 13, weight: isSelected ? .medium : .light))
+                        .foregroundStyle(isSelected ? Theme.ink : Theme.ink.opacity(0.62))
+                        .frame(width: 18)
+                        .symbolEffect(.bounce, value: isSelected)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color(red: 0.78, green: 0.38, blue: 0.40))
+                        .frame(width: 18)
+                }
                 Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? Theme.ink : Theme.ink.opacity(0.8))
+                    .font(.system(size: 13, weight: isSelected && Theme.isWashi ? .semibold : .regular))
+                    .foregroundStyle(isSelected || !Theme.isWashi ? Theme.ink : Theme.ink.opacity(0.8))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -395,7 +455,7 @@ private struct SidebarRow: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .simultaneousGesture(TapGesture(count: 2).onEnded { onDoubleClick?() })
-        .listRowInsets(EdgeInsets(top: 1, leading: 0, bottom: 1, trailing: 6))
+        .padding(.trailing, 6)
     }
 }
 
@@ -416,8 +476,8 @@ private struct SidebarPlaylistRow: View {
                         .strokeBorder(Theme.hairline, lineWidth: 0.5))
                     .saturation(isSelected || isHovering ? 1 : 0.75)
                 Text(playlist.name)
-                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? Theme.ink : Theme.ink.opacity(0.78))
+                    .font(.system(size: 12.5, weight: isSelected && Theme.isWashi ? .semibold : .regular))
+                    .foregroundStyle(isSelected || !Theme.isWashi ? Theme.ink : Theme.ink.opacity(0.78))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -430,6 +490,6 @@ private struct SidebarPlaylistRow: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .animation(AppAnimation.quick, value: isHovering)
-        .listRowInsets(EdgeInsets(top: 1, leading: 0, bottom: 1, trailing: 6))
+        .padding(.trailing, 6)
     }
 }

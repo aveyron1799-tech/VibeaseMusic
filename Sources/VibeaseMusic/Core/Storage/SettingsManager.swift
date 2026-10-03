@@ -52,6 +52,23 @@ enum AppAppearance: String, CaseIterable, Identifiable {
     }
 }
 
+/// Visual language of the whole interface.
+enum UITheme: String, CaseIterable, Identifiable {
+    /// 纸·禅 — rice paper, sumi ink and a vermilion seal.
+    case washi
+    /// The original glass-and-NetEase-red look.
+    case classic
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .washi: return String(localized: "纸·禅")
+        case .classic: return String(localized: "经典")
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class SettingsManager {
@@ -60,6 +77,7 @@ final class SettingsManager {
     private enum Keys {
         static let quality = "settings.audioQuality"
         static let appearance = "settings.appearance"
+        static let uiTheme = "settings.uiTheme"
         static let showTranslation = "settings.showLyricsTranslation"
         static let volume = "settings.volume"
         static let fmMode = "settings.fmMode"
@@ -73,6 +91,10 @@ final class SettingsManager {
 
     var appearance: AppAppearance {
         didSet { UserDefaults.standard.set(appearance.rawValue, forKey: Keys.appearance) }
+    }
+
+    var uiTheme: UITheme {
+        didSet { UserDefaults.standard.set(uiTheme.rawValue, forKey: Keys.uiTheme) }
     }
 
     var showLyricsTranslation: Bool {
@@ -93,6 +115,7 @@ final class SettingsManager {
         let defaults = UserDefaults.standard
         audioQuality = defaults.string(forKey: Keys.quality).flatMap(AudioQuality.init) ?? .exhigh
         appearance = defaults.string(forKey: Keys.appearance).flatMap(AppAppearance.init) ?? .auto
+        uiTheme = defaults.string(forKey: Keys.uiTheme).flatMap(UITheme.init) ?? .washi
         showLyricsTranslation = defaults.object(forKey: Keys.showTranslation) as? Bool ?? true
         enableUnblock = defaults.object(forKey: Keys.unblock) as? Bool ?? true
         showDesktopLyrics = defaults.object(forKey: Keys.desktopLyrics) as? Bool ?? false

@@ -7,7 +7,8 @@ struct UserProfile { var userId: Int; var vipType = 0 }
 struct PlaylistSummary { var creator: UserProfile?; var isLikedSongsList = false }
 struct AlbumSummary {}
 struct ArtistSummary {}
-final class NeteaseClient { static let shared = NeteaseClient(); var isLoggedIn = true }
+final class NeteaseClient { static let shared = NeteaseClient(); var isLoggedIn = true; func clearAuthCookies() { isLoggedIn = false } }
+enum NeteaseAPIError: Error { case needLogin }
 enum AudioQuality: String { case standard }
 final class SettingsManager { static let shared = SettingsManager(); var audioQuality = AudioQuality.standard; var enableUnblock = false }
 @MainActor final class NowPlayingManager { static let shared = NowPlayingManager(); func attach(to: PlayerService) {}; func updateMetadata(for: Track, duration: Double, isPlaying: Bool) {}; func updateElapsed(_ elapsed: Double, rate: Double, force: Bool = true) {} }

@@ -111,9 +111,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.applicationIconImage = icon
         }
         ImageCache.pruneDiskCacheInBackground()
-        #if DEBUG
-        DebugSnapshot.scheduleIfRequested()
-        #endif
         // Space toggles play/pause unless a text field is being edited.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
             let noModifiers = event.modifierFlags

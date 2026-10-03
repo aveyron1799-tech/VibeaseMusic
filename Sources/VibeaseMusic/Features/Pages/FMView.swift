@@ -127,7 +127,7 @@ struct FMView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Theme.ink)
+                        .fill(Theme.inkFill)
                         .frame(width: 62, height: 62)
                         .shadow(color: Theme.shadow.opacity(1.3), radius: 12, y: 6)
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")

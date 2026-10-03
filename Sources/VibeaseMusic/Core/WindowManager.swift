@@ -101,6 +101,13 @@ struct WindowAccessor: NSViewRepresentable {
             window.delegate = MainWindowDelegate.shared
             window.isReleasedWhenClosed = false
             window.titlebarAppearsTransparent = false
+            // The sidebar is a plain scroll view, so AppKit would hand initial
+            // keyboard focus to the first toolbar button and ring it.
+            window.initialFirstResponder = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak window] in
+                guard let window, !(window.firstResponder is NSText) else { return }
+                window.makeFirstResponder(nil)
+            }
         }
         // Keep the system sidebar item, including its placement and keyboard action.
         // Suppress only this item's blue focus ring, not focus throughout the window.

@@ -287,6 +287,13 @@ struct ShelfScrollView<Content: View>: NSViewRepresentable {
         return view
     }
 
+    /// The shelf always fills the offered width at a fixed height. Answering
+    /// directly keeps SwiftUI from measuring the hosted AppKit view (and the
+    /// whole row of cards inside it) on every frame of a window or sidebar resize.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: ShelfNSScrollView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: contentHeight)
+    }
+
     func updateNSView(_ nsView: ShelfNSScrollView, context: Context) {
         nsView.contentHeight = contentHeight
         nsView.setContent(AnyView(content.frame(minHeight: contentHeight, alignment: .top)))
@@ -302,7 +309,7 @@ struct ShelfScrollView<Content: View>: NSViewRepresentable {
 final class ShelfNSScrollView: NSScrollView {
     var contentHeight: CGFloat
 
-    private var hostingView: NSHostingView<AnyView>?
+    private var hostingView: ShelfHostingView?
 
     init(contentHeight: CGFloat) {
         self.contentHeight = contentHeight
@@ -324,8 +331,12 @@ final class ShelfNSScrollView: NSScrollView {
         if let hostingView {
             hostingView.rootView = content
         } else {
-            let hostingView = NSHostingView(rootView: content)
-            hostingView.translatesAutoresizingMaskIntoConstraints = false
+            let hostingView = ShelfHostingView(rootView: content)
+            // Frame-based: the document is sized from the cards' ideal width in
+            // `updateDocumentSize`, so it needs no Auto Layout constraints.
+            hostingView.sizingOptions = [.intrinsicContentSize]
+            hostingView.translatesAutoresizingMaskIntoConstraints = true
+            hostingView.onIntrinsicSizeChange = { [weak self] in self?.needsLayout = true }
             self.hostingView = hostingView
             documentView = hostingView
         }
@@ -369,8 +380,9 @@ final class ShelfNSScrollView: NSScrollView {
 
     private func updateDocumentSize() {
         guard let hostingView else { return }
-        let fittingSize = hostingView.fittingSize
-        let width = max(contentView.bounds.width, fittingSize.width)
+        // `intrinsicContentSize` is cached by SwiftUI until the cards change;
+        // `fittingSize` would run a full Auto Layout pass on every layout.
+        let width = max(contentView.bounds.width, hostingView.intrinsicContentSize.width)
         let height = max(contentHeight, contentView.bounds.height)
         let frame = NSRect(x: 0, y: 0, width: width, height: height)
         if hostingView.frame != frame {
@@ -447,5 +459,14 @@ struct EmptyStateView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+final class ShelfHostingView: NSHostingView<AnyView> {
+    var onIntrinsicSizeChange: (() -> Void)?
+
+    override func invalidateIntrinsicContentSize() {
+        super.invalidateIntrinsicContentSize()
+        onIntrinsicSizeChange?()
     }
 }

@@ -1,102 +1,69 @@
 import AppKit
 import CoreGraphics
 
-// Builds AppIcon.icns / AppIcon.iconset / Resources/AppIcon_1024.png from a
-// full-bleed square artwork. Usage: swift Scripts/generate_icns.swift [source.png]
-let scriptURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
-let rootDir = scriptURL.deletingLastPathComponent().deletingLastPathComponent().path
-let inputPath = CommandLine.arguments.count > 1
-    ? CommandLine.arguments[1]
-    : "\(rootDir)/Resources/AppIconSource/washi-source.png"
+let inputPath = "/Users/mac/Projects/VibeaseMusic/Resources/AppIconPreviews/VibeaseMusic-transparent.png"
+let rootDir = "/Users/mac/Projects/VibeaseMusic"
 
 guard let inputImage = NSImage(contentsOfFile: inputPath),
-      let source = inputImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-    print("Error: Could not load source image at \(inputPath)")
+      let cgImage = inputImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+    print("Error: Could not load source image")
     exit(1)
 }
 
-let targetSize = 1024
-let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
-
-func makeContext(_ size: Int) -> CGContext {
-    CGContext(
-        data: nil, width: size, height: size, bitsPerComponent: 8,
-        bytesPerRow: size * 4, space: colorSpace,
-        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-    )!
+// The edited source has a transparent canvas around the artwork. Crop the icon
+// itself so no canvas matte or generated speckles can enter the final icon.
+let cropRect = CGRect(x: 107, y: 107, width: 1040, height: 1010)
+guard let cropped = cgImage.cropping(to: cropRect) else {
+    print("Error: Cropping failed")
+    exit(1)
 }
 
-let context = makeContext(targetSize)
+// Create 1024x1024 master canvas
+let targetSize = 1024
+let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+guard let context = CGContext(
+    data: nil,
+    width: targetSize,
+    height: targetSize,
+    bitsPerComponent: 8,
+    bytesPerRow: targetSize * 4,
+    space: colorSpace,
+    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+) else {
+    print("Error: CGContext creation failed")
+    exit(1)
+}
+
 context.interpolationQuality = .high
 
-// macOS icon grid: 824pt body centered in the 1024 canvas.
-let iconSize: CGFloat = 824
-let iconOrigin = (CGFloat(targetSize) - iconSize) / 2
+// Standard macOS Big Sur icon size in 1024 canvas is 824x824 centered
+let iconSize: CGFloat = 824.0
+let iconOrigin: CGFloat = (CGFloat(targetSize) - iconSize) / 2.0 // 100.0
 let iconRect = CGRect(x: iconOrigin, y: iconOrigin, width: iconSize, height: iconSize)
-let cornerRadius = iconSize * 0.2245
-let squircle = CGPath(roundedRect: iconRect, cornerWidth: cornerRadius,
-                      cornerHeight: cornerRadius, transform: nil)
 
-// Slight zoom so the generated art's soft outer falloff is cropped away.
-let zoom: CGFloat = 1.02
-let artSize = iconSize * zoom
-let artRect = CGRect(x: iconRect.midX - artSize / 2, y: iconRect.midY - artSize / 2,
-                     width: artSize, height: artSize)
+// The artwork already contains its rounded-square silhouette. This clip only
+// cleans the extreme transparent edge; the .icns is packaged directly, without
+// Icon Composer adding a second system border or backing plate.
+let cornerRadius: CGFloat = iconSize * 0.2245
+let squirclePath = CGPath(roundedRect: iconRect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
 
-// Soft contact shadow so the paper tile sits on the Dock.
+// Clip to clean squircle
 context.saveGState()
-context.setShadow(offset: CGSize(width: 0, height: -10), blur: 24,
-                  color: CGColor(red: 0.12, green: 0.08, blue: 0.04, alpha: 0.28))
-context.addPath(squircle)
-context.setFillColor(CGColor(red: 0.95, green: 0.93, blue: 0.89, alpha: 1))
-context.fillPath()
-context.restoreGState()
-
-context.saveGState()
-context.addPath(squircle)
+context.addPath(squirclePath)
 context.clip()
-context.draw(source, in: artRect)
 
-// Top sheen: a soft glass highlight that fades out by mid-height.
-let sheen = CGGradient(colorsSpace: colorSpace, colors: [
-    CGColor(red: 1, green: 1, blue: 1, alpha: 0.10),
-    CGColor(red: 1, green: 1, blue: 1, alpha: 0.0),
-] as CFArray, locations: [0, 1])!
-context.drawLinearGradient(sheen,
-                           start: CGPoint(x: iconRect.midX, y: iconRect.maxY),
-                           end: CGPoint(x: iconRect.midX, y: iconRect.midY + 60),
-                           options: [])
-
-// Bottom vignette to seat the artwork.
-let vignette = CGGradient(colorsSpace: colorSpace, colors: [
-    CGColor(red: 0, green: 0, blue: 0, alpha: 0.0),
-    CGColor(red: 0.30, green: 0.20, blue: 0.08, alpha: 0.10),
-] as CFArray, locations: [0, 1])!
-context.drawLinearGradient(vignette,
-                           start: CGPoint(x: iconRect.midX, y: iconRect.midY - 80),
-                           end: CGPoint(x: iconRect.midX, y: iconRect.minY),
-                           options: [])
+// Draw the cropped artwork scaled to fill the squircle
+context.draw(cropped, in: iconRect)
 context.restoreGState()
 
-// Hairline inner rim so the edge reads on dark Docks.
-context.saveGState()
-context.addPath(squircle)
-context.clip()
-context.addPath(CGPath(roundedRect: iconRect.insetBy(dx: 1.5, dy: 1.5),
-                       cornerWidth: cornerRadius - 1.5, cornerHeight: cornerRadius - 1.5,
-                       transform: nil))
-context.setStrokeColor(CGColor(red: 0.25, green: 0.18, blue: 0.10, alpha: 0.10))
-context.setLineWidth(3)
-context.strokePath()
-context.restoreGState()
-
-// Force the solid interior fully opaque: macOS wraps icons with partial alpha
-// in an extra backing plate. Antialiased silhouette edges stay translucent.
+// Encode the solid artwork as opaque. The generated source carries alpha 253/254
+// even in its solid interior; macOS otherwise treats it as a floating glyph and
+// inserts a backing plate. Keep antialiased silhouette edges transparent.
 if let bytes = context.data?.assumingMemoryBound(to: UInt8.self) {
     for pixel in 0..<(targetSize * targetSize) {
         let offset = pixel * 4
         let alpha = Int(bytes[offset + 3])
-        if alpha >= 240, alpha < 255 {
+        if alpha >= 240 {
             for channel in 0..<3 {
                 bytes[offset + channel] = UInt8(min(255, Int(bytes[offset + channel]) * 255 / alpha))
             }
@@ -105,34 +72,61 @@ if let bytes = context.data?.assumingMemoryBound(to: UInt8.self) {
     }
 }
 
-let master = context.makeImage()!
-
-func writePNG(_ image: CGImage, to path: String) {
-    let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])!
-    try! png.write(to: URL(fileURLWithPath: path))
+guard let masterCGImage = context.makeImage() else {
+    print("Error: Master image creation failed")
+    exit(1)
 }
 
-writePNG(master, to: "\(rootDir)/Resources/AppIcon_1024.png")
-writePNG(master, to: "\(rootDir)/AppIcon.icon/Assets/AppIcon.png")
-writePNG(master, to: "\(rootDir)/docs/icon.png")
+let masterRep = NSBitmapImageRep(cgImage: masterCGImage)
+let masterPNG = masterRep.representation(using: .png, properties: [:])!
 
+// Save master PNG
+let masterPNGPath = "\(rootDir)/Resources/AppIcon_1024.png"
+try! masterPNG.write(to: URL(fileURLWithPath: masterPNGPath))
+print("Saved clean master icon: \(masterPNGPath)")
+
+// Generate iconset
 let iconsetDir = "\(rootDir)/AppIcon.iconset"
 try? FileManager.default.removeItem(atPath: iconsetDir)
 try! FileManager.default.createDirectory(atPath: iconsetDir, withIntermediateDirectories: true)
 
-let sizes: [(String, Int)] = [
-    ("icon_16x16.png", 16), ("icon_16x16@2x.png", 32),
-    ("icon_32x32.png", 32), ("icon_32x32@2x.png", 64),
-    ("icon_128x128.png", 128), ("icon_128x128@2x.png", 256),
-    ("icon_256x256.png", 256), ("icon_256x256@2x.png", 512),
-    ("icon_512x512.png", 512), ("icon_512x512@2x.png", 1024),
+let sizes: [(name: String, size: Int)] = [
+    ("icon_16x16.png", 16),
+    ("icon_16x16@2x.png", 32),
+    ("icon_32x32.png", 32),
+    ("icon_32x32@2x.png", 64),
+    ("icon_128x128.png", 128),
+    ("icon_128x128@2x.png", 256),
+    ("icon_256x256.png", 256),
+    ("icon_256x256@2x.png", 512),
+    ("icon_512x512.png", 512),
+    ("icon_512x512@2x.png", 1024)
 ]
-for (name, size) in sizes {
-    let resized = makeContext(size)
-    resized.interpolationQuality = .high
-    resized.draw(master, in: CGRect(x: 0, y: 0, width: size, height: size))
-    writePNG(resized.makeImage()!, to: "\(iconsetDir)/\(name)")
+
+for item in sizes {
+    guard let resizeContext = CGContext(
+        data: nil,
+        width: item.size,
+        height: item.size,
+        bitsPerComponent: 8,
+        bytesPerRow: item.size * 4,
+        space: colorSpace,
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else { continue }
+    
+    resizeContext.interpolationQuality = .high
+    resizeContext.draw(masterCGImage, in: CGRect(x: 0, y: 0, width: item.size, height: item.size))
+    
+    if let resizedCG = resizeContext.makeImage() {
+        let rep = NSBitmapImageRep(cgImage: resizedCG)
+        if let png = rep.representation(using: .png, properties: [:]) {
+            let outPath = "\(iconsetDir)/\(item.name)"
+            try! png.write(to: URL(fileURLWithPath: outPath))
+        }
+    }
 }
+
+print("Iconset generated successfully.")
 
 let iconutil = Process()
 iconutil.executableURL = URL(fileURLWithPath: "/usr/bin/iconutil")
@@ -143,4 +137,4 @@ guard iconutil.terminationStatus == 0 else {
     print("Error: iconutil failed")
     exit(iconutil.terminationStatus)
 }
-print("Icon written to \(rootDir)/AppIcon.icns")
+print("Saved AppIcon.icns without an additional system frame.")

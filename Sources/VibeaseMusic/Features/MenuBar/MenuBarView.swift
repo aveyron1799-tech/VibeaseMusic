@@ -128,7 +128,7 @@ struct MenuBarPlayerView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(Theme.ink)
+                        .fill(Theme.inkFill)
                         .frame(width: 34, height: 34)
                         .shadow(color: Theme.shadow, radius: 4, y: 2)
 

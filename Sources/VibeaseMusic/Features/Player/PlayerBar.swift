@@ -155,7 +155,7 @@ struct PlayerBar: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(Theme.ink)
+                    .fill(Theme.inkFill)
                     .frame(width: 32, height: 32)
                     .shadow(color: Theme.shadow, radius: 4, y: 2)
                 if player.isBuffering && player.isPlaying {

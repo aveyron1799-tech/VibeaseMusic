@@ -23,7 +23,11 @@ struct MainWindow: View {
                 path = NavigationPath()
                 homeScrollRequest += 1
             }
+                .equatable()
                 .navigationSplitViewColumnWidth(min: 200, ideal: Theme.Layout.sidebarWidth, max: 280)
+                // Washi replaces the system sidebar toggle, whose Liquid Glass
+                // bezel would be the only piece of glass on the paper.
+                .toolbar(removing: Theme.isWashi ? .sidebarToggle : nil)
         } detail: {
             detailStack
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -31,6 +35,18 @@ struct MainWindow: View {
                 .playerChrome()
         }
         .toolbar {
+            if Theme.isWashi {
+                if #available(macOS 26.0, *) {
+                    ToolbarItem(placement: .navigation) {
+                        SidebarToggleButton(columnVisibility: $columnVisibility)
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                } else {
+                    ToolbarItem(placement: .navigation) {
+                        SidebarToggleButton(columnVisibility: $columnVisibility)
+                    }
+                }
+            }
             if #available(macOS 26.0, *) {
                 ToolbarItem(placement: .primaryAction) {
                     SearchFieldView(text: $searchText, isFocused: $searchFocused,
@@ -64,7 +80,10 @@ struct MainWindow: View {
         .toolbarBackground(player.showNowPlaying ? .hidden : .automatic, for: .windowToolbar)
         .background(WindowAccessor { window in
             // Let the paper run up under the title bar instead of a grey strip.
-            window.backgroundColor = NSColor(Theme.paper)
+            let background = Theme.windowBackground
+            if window.backgroundColor !== background {
+                window.backgroundColor = background
+            }
         })
         .overlay(alignment: .topTrailing) {
             if !searchSuggestions.isEmpty && !player.showNowPlaying {
@@ -376,6 +395,40 @@ struct SearchFieldView: View {
 
     @State private var placeholderQuery = ""
 
+}
+
+// MARK: - Sidebar toggle
+
+/// A bare ink glyph on the paper, with a faint wash on hover.
+private struct SidebarToggleButton: View {
+    @Binding var columnVisibility: NavigationSplitViewVisibility
+    @State private var isHovering = false
+
+    private var isCollapsed: Bool { columnVisibility == .detailOnly }
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.28)) {
+                columnVisibility = isCollapsed ? .all : .detailOnly
+            }
+        } label: {
+            Image(systemName: "sidebar.leading")
+                .font(.system(size: 14, weight: .light))
+                .foregroundStyle(Theme.ink.opacity(isHovering ? 0.9 : 0.6))
+                .frame(width: 30, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.standard, style: .continuous)
+                        .fill(isHovering ? Theme.wash : .clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+        .focusEffectDisabled()
+        .onHover { isHovering = $0 }
+        .animation(AppAnimation.quick, value: isHovering)
+        .help(isCollapsed ? "显示边栏" : "隐藏边栏")
+        .accessibilityLabel(isCollapsed ? "显示边栏" : "隐藏边栏")
+    }
 }
 
 // MARK: - Toast

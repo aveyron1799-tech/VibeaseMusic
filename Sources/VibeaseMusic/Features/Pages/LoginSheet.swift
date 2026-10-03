@@ -112,7 +112,7 @@ struct LoginSheet: View {
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(Theme.onInk)
                             .frame(width: 34, height: 34)
-                            .background(Circle().fill(Theme.ink))
+                            .background(Circle().fill(Theme.inkFill))
                         Text("已扫码")
                             .font(.serif(14, .bold))
                             .foregroundStyle(Theme.ink)

@@ -1,17 +1,22 @@
 import SwiftUI
 
-/// Cards lift off the page like a sheet of paper picked up by one corner.
+/// Washi: cards lift off the page like a sheet of paper picked up by one corner.
+/// Classic: cards scale up on hover with a soft shadow.
 struct InteractiveCardStyle: ButtonStyle {
     var showShadow = true
-    var hoverScale: CGFloat = 1.0
+    var hoverScale: CGFloat?
     var pressScale: CGFloat = 0.985
 
     @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
+        let washi = Theme.isWashi
+        let hoverScale = hoverScale ?? (washi ? 1.0 : 1.02)
         configuration.label
-            .scaleEffect(configuration.isPressed ? pressScale : hoverScale)
-            .offset(y: isHovering && !configuration.isPressed ? -3 : 0)
+            .scaleEffect(configuration.isPressed ? pressScale : (isHovering ? hoverScale : 1.0))
+            .offset(y: washi && isHovering && !configuration.isPressed ? -3 : 0)
+            .shadow(color: !washi && showShadow && isHovering ? .black.opacity(0.15) : .clear,
+                    radius: isHovering ? 12 : 0, y: isHovering ? 4 : 0)
             .animation(AppAnimation.spring, value: configuration.isPressed)
             .animation(AppAnimation.spring, value: isHovering)
             .onHover { isHovering = $0 }
@@ -57,15 +62,18 @@ struct ChipButtonStyle: ButtonStyle {
     @State private var isHovering = false
 
     func makeBody(configuration: Configuration) -> some View {
+        let washi = Theme.isWashi
         configuration.label
-            .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+            .font(.system(size: 12, weight: isSelected ? .semibold : (washi ? .regular : .medium)))
             .padding(.horizontal, 12)
-            .padding(.vertical, 5)
+            .padding(.vertical, washi ? 5 : 6)
             .background(
-                Capsule().fill(isSelected ? Theme.ink : (isHovering ? Theme.wash : .clear))
+                Capsule().fill(isSelected ? Theme.inkFill
+                    : washi ? (isHovering ? Theme.wash : .clear)
+                    : Color.primary.opacity(isHovering ? 0.1 : 0.06))
             )
-            .overlay(Capsule().strokeBorder(isSelected ? .clear : Theme.hairline, lineWidth: 0.75))
-            .foregroundStyle(isSelected ? Theme.onInk : Theme.ink.opacity(0.78))
+            .overlay(Capsule().strokeBorder(isSelected || !washi ? .clear : Theme.hairline, lineWidth: 0.75))
+            .foregroundStyle(isSelected ? Theme.onInk : Theme.ink.opacity(washi ? 0.78 : 1))
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
             .animation(AppAnimation.snappy, value: isSelected)
             .animation(AppAnimation.quick, value: configuration.isPressed)
@@ -74,7 +82,8 @@ struct ChipButtonStyle: ButtonStyle {
     }
 }
 
-/// Primary action: an inked capsule. On hover, vermilion seeps in from below.
+/// Primary action. Washi: an inked capsule that vermilion seeps into from
+/// below on hover. Classic: a NetEase-red capsule.
 struct InkButtonStyle: ButtonStyle {
     var prominent = true
 
@@ -89,13 +98,17 @@ struct InkButtonStyle: ButtonStyle {
             .foregroundStyle(prominent ? Theme.onInk : Theme.ink)
             .background {
                 if prominent {
-                    ZStack(alignment: .bottom) {
-                        Capsule().fill(Theme.ink)
-                        Capsule().fill(Theme.accent)
-                            .scaleEffect(y: isHovering ? 1 : 0.001, anchor: .bottom)
-                            .opacity(isHovering ? 1 : 0)
+                    if Theme.isWashi {
+                        ZStack(alignment: .bottom) {
+                            Capsule().fill(Theme.inkFill)
+                            Capsule().fill(Theme.accent)
+                                .scaleEffect(y: isHovering ? 1 : 0.001, anchor: .bottom)
+                                .opacity(isHovering ? 1 : 0)
+                        }
+                        .clipShape(Capsule())
+                    } else {
+                        Capsule().fill(isHovering ? Theme.accentDeep : Theme.accent)
                     }
-                    .clipShape(Capsule())
                 } else {
                     Capsule().fill(isHovering ? Theme.wash : .clear)
                         .overlay(Capsule().strokeBorder(Theme.ink.opacity(0.22), lineWidth: 0.75))

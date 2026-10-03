@@ -26,8 +26,19 @@ struct SettingsView: View {
                 }
 
                 SettingsSection("外观") {
-                    SettingsRow("主题") {
-                        Picker("主题", selection: $settings.appearance) {
+                    SettingsRow("主题", note: "纸·禅：宣纸、墨色与朱印；经典：毛玻璃与网易红") {
+                        Picker("主题", selection: $settings.uiTheme) {
+                            ForEach(UITheme.allCases) { theme in
+                                Text(theme.displayName).tag(theme)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                    SettingsDivider()
+                    SettingsRow("深浅色") {
+                        Picker("深浅色", selection: $settings.appearance) {
                             ForEach(AppAppearance.allCases) { appearance in
                                 Text(appearance.displayName).tag(appearance)
                             }
