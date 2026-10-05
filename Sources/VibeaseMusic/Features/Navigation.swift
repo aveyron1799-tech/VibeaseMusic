@@ -83,6 +83,9 @@ struct DestinationsModifier: ViewModifier {
             }
             .playerContentInset()
             .background { PaperBackground().ignoresSafeArea() }
+            // Pushed pages are layered above the detail column's own overlay,
+            // so each one carries its chrome or the player bar disappears.
+            .playerChrome()
         }
     }
 }

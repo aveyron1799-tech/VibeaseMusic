@@ -61,6 +61,9 @@ struct ClassicDestinationsModifier: ViewModifier {
             }
             .classicPlayerContentInset()
             .background(Color(nsColor: .windowBackgroundColor))
+            // Pushed pages are layered above the detail column's own overlay,
+            // so each one carries its chrome or the player bar disappears.
+            .classicPlayerChrome()
         }
     }
 }
