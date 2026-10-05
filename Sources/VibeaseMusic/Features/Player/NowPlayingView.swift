@@ -51,6 +51,10 @@ struct NowPlayingView: View {
             .padding(.leading, 24)
         }
         .ignoresSafeArea()
+        // The paper backdrop opts out of hit testing, so empty regions of this
+        // page would let clicks fall through to the views underneath (e.g. the
+        // sidebar's account chip). Make the whole surface hittable instead.
+        .contentShape(Rectangle())
         .task(id: player.currentTrack?.id) {
             await loadArtwork()
         }

@@ -46,6 +46,9 @@ struct ClassicNowPlayingView: View {
             .padding(.leading, 20)
         }
         .ignoresSafeArea()
+        // Keep clicks from falling through to the views underneath (the
+        // classic sidebar carries the same account chip at its bottom).
+        .contentShape(Rectangle())
         .preferredColorScheme(.dark)
         .task(id: player.currentTrack?.id) {
             await loadArtwork()
