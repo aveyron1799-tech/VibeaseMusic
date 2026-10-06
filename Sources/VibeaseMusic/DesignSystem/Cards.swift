@@ -296,7 +296,9 @@ struct ShelfScrollView<Content: View>: NSViewRepresentable {
 
     func updateNSView(_ nsView: ShelfNSScrollView, context: Context) {
         nsView.contentHeight = contentHeight
-        nsView.setContent(AnyView(content.frame(minHeight: contentHeight, alignment: .top)))
+        // Hosted in its own NSHostingView, so it does not inherit the app-wide setting.
+        nsView.setContent(AnyView(content.frame(minHeight: contentHeight, alignment: .top)
+            .focusEffectDisabled()))
 
         let delta = pageRequest - context.coordinator.handledPageRequest
         context.coordinator.handledPageRequest = pageRequest

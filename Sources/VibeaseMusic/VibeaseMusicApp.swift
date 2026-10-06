@@ -22,6 +22,8 @@ struct VibeaseMusicApp: App {
                 .environment(settings)
                 .environment(toasts)
                 .tint(themeAccent)
+                // No system focus ring on buttons; hover and press states carry the feedback.
+                .focusEffectDisabled()
                 .preferredColorScheme(settings.appearance.colorScheme)
                 .frame(minWidth: Theme.Layout.minWindowWidth,
                        minHeight: Theme.Layout.minWindowHeight)
@@ -92,6 +94,8 @@ struct VibeaseMusicApp: App {
                 .environment(account)
                 .environment(settings)
                 .tint(themeAccent)
+                // No system focus ring on buttons; hover and press states carry the feedback.
+                .focusEffectDisabled()
                 .preferredColorScheme(settings.appearance.colorScheme)
         } label: {
             Group {
@@ -114,6 +118,8 @@ struct VibeaseMusicApp: App {
                 .environment(account)
                 .environment(settings)
                 .tint(themeAccent)
+                // No system focus ring on buttons; hover and press states carry the feedback.
+                .focusEffectDisabled()
                 .preferredColorScheme(settings.appearance.colorScheme)
         }
     }
